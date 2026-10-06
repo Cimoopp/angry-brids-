@@ -23,6 +23,13 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         hideSystemUi();
 
+        // ИСПРАВЛЕНИЕ: чистим кэш WebView, иначе после обновления APK
+        // может открываться старая версия index.html из кэша.
+        try {
+            deleteDatabase("webview.db");
+            deleteDatabase("webviewCache.db");
+        } catch (Exception ignored) { }
+
         web = new WebView(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -33,13 +40,15 @@ public class MainActivity extends Activity {
         s.setSupportZoom(false);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // Всегда берём assets из APK, без кэша
+        s.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         web.setWebChromeClient(new WebChromeClient());
         web.setBackgroundColor(0xFF0A0E1A);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setLongClickable(false);
         web.setHapticFeedbackEnabled(false);
+        web.clearCache(true);
         web.loadUrl("file:///android_asset/index.html");
 
         setContentView(web);
@@ -67,8 +76,6 @@ public class MainActivity extends Activity {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK && web != null) {
-            // Спрашиваем у игры, обработала ли она «назад».
-            // В меню игра отвечает false — тогда выходим из приложения.
             web.evaluateJavascript(
                     "(function(){try{return !!(window.onAndroidBack && window.onAndroidBack());}catch(e){return false;}})()",
                     new ValueCallback<String>() {
@@ -98,6 +105,7 @@ public class MainActivity extends Activity {
         super.onResume();
         if (web != null) {
             web.onResume();
+            web.evaluateJavascript("window.onAndroidResume && window.onAndroidResume();", null);
         }
         hideSystemUi();
     }
