@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -26,8 +29,42 @@ jobs:
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Upload APK
+      - name: Prepare APK file
+        run: |
+          mkdir -p release
+          cp app/build/outputs/apk/debug/*.apk release/angry-birds.apk
+          ls -lh release
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: angry-birds-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: release/angry-birds.apk
+
+      - name: Remove previous release
+        run: gh release delete apk-latest --yes --cleanup-tag || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: Angry Birds - свежая сборка
+          body: |
+            ## Angry Birds для Android
+
+            Готовая сборка игры: 50 уровней, 4 типа птиц, магазин, 20 достижений,
+            горизонтальный фуллскрин.
+
+            ### Как установить
+            1. Скачай файл `angry-birds.apk` ниже
+            2. Открой его на телефоне
+            3. Если Android попросит - разреши установку из неизвестных источников
+            4. Запусти игру, телефон держи горизонтально
+
+            Сборка обновляется автоматически при каждом изменении игры.
+          files: release/angry-birds.apk
+          make_latest: true
+          draft: false
+          prerelease: false
