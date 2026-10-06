@@ -33,6 +33,7 @@ jobs:
         run: |
           mkdir -p release
           APK="$(ls app/build/outputs/apk/debug/*.apk | head -n 1)"
+          echo "Беру файл: $APK"
           cp "$APK" release/angry-birds.apk
           ls -lh release
 
@@ -42,6 +43,9 @@ jobs:
           name: angry-birds-apk
           path: release/angry-birds.apk
 
+      # ИСПРАВЛЕНИЕ: убран флаг --cleanup-tag.
+      # Он удалял тег apk-latest, и следующий шаг не мог
+      # выпустить релиз на несуществующий тег.
       - name: Remove previous release
         run: gh release delete apk-latest --yes || true
         env:
@@ -51,7 +55,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
-          name: Angry Birds — свежая сборка
-          body: Автоматическая сборка из ветки main. Скачай angry-birds.apk и установи на телефон.
+          name: "Angry Birds — свежая сборка"
+          body: |
+            Автоматическая сборка из ветки main.
+
+            Скачай **angry-birds.apk** ниже и установи на телефон.
           files: release/angry-birds.apk
           make_latest: true
