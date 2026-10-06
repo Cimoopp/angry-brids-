@@ -1,5 +1,7 @@
-(function () {
 'use strict';
+/* Angry Birds — часть 1: движок.
+   Утилиты, сохранение, звук, физика, уровни, игровая логика, отрисовка, цикл.
+   Ввод, кнопки и запуск — в boot.js (подключается вторым). */
 
 /* ===================== утилиты ===================== */
 const $ = s => document.querySelector(s);
@@ -106,7 +108,7 @@ const MATS = {
   ice: { base: 60, dens: 0.0010, rest: 0.28, fric: 0.60, c1: '#bfeaf7', c2: '#6fb6d8', coin: 7 },
   stone: { base: 175, dens: 0.0024, rest: 0.14, fric: 0.86, c1: '#b8bdc7', c2: '#767d89', coin: 9 }
 };
-let cv, ctx, DPR = 1, SCALE = 1, viewW = 1400;
+let cv = null, ctx = null, DPR = 1, SCALE = 1, viewW = 1400;
 let cam = { x: 0 };
 let bodies = [], parts = [], flock = [], pigsAlive = 0;
 let state = 'menu', level = 1, score = 0, coinsEarned = 0, killsThisLevel = 0, shotsThisLevel = 0;
@@ -115,6 +117,7 @@ let queue = [], current = null, drag = null;
 let clouds = [], idc = 1;
 
 function resize() {
+  if (!cv) return;
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   const w = window.innerWidth, h = window.innerHeight;
   cv.width = Math.floor(w * DPR); cv.height = Math.floor(h * DPR);
@@ -395,18 +398,22 @@ function makeQueue(n) {
   while (q.length < 3) q.push('red');
   if (n >= 10) q.push(save.items.blue ? 'blue' : 'red');
   if (n >= 18) q.push(save.items.black ? 'black' : 'yellow');
+  if (n >= 25) q.push(save.items.blue ? 'blue' : 'yellow');
+  if (n >= 35) q.push(save.items.black ? 'black' : 'yellow');
   for (let i = 0; i < save.items.gold; i++) q.push('red');
   return q;
 }
 
 /* ===================== игра ===================== */
-const slingX = 268, slingTopY = groundY - 300;
+const slingX = 268;
+const slingTopY = groundY - 300;
 let powerMul = 1;
 
 function startLevel(n) {
   level = n;
   score = 0; coinsEarned = 0; killsThisLevel = 0; shotsThisLevel = 0;
   comboNow = 0; comboBest = 0; comboWindow = 0; shake = 0; waitT = 0; hudT = 0;
+  drag = null;
   powerMul = 1 + 0.1 * save.items.power;
   buildLevel(n);
   queue = makeQueue(n);
@@ -484,7 +491,7 @@ function winLevel() {
   state = 'end';
   const birdsLeft = queue.length + (current ? 1 : 0);
   score += birdsLeft * 10000;
-  const st = score >= 26000 + level * 1800 ? 3 : (score >= 15000 + level * 1200 ? 2 : 1);
+  const st = score >= 9000 + level * 1100 ? 3 : (score >= 5000 + level * 700 ? 2 : 1);
   const prev = save.stars[level] || 0;
   if (st > prev) { save.stars[level] = st; save.stats.starsTotal = totalStars(); }
   if (birdsLeft > 0) save.stats.perfect++;
@@ -536,17 +543,19 @@ const ACH = [
   { id: 'shop', n: 'Покупатель', d: 'Сделать 3 покупки', ic: '🛒', goal: 3, v: s => s.stats.purchases }
 ];
 function checkAch() {
-  let changed = false;
+  let changed = false, got = 0;
   for (const a of ACH) {
     if (save.ach[a.id]) continue;
     if (a.v(save) >= a.goal) {
-      save.ach[a.id] = true; save.coins += 200; changed = true;
+      save.ach[a.id] = true; save.coins += 200; changed = true; got++;
       tone(1046, 0.2, 'triangle', 0.14);
       setTimeout(() => tone(1568, 0.25, 'triangle', 0.12), 120);
     }
   }
   if (changed) persist();
-  if (!$('#ach').classList.contains('hidden')) renderAch();
+  const el = $('#ach');
+  if (el && !el.classList.contains('hidden')) renderAch();
+  return got;
 }
 
 /* ===================== магазин ===================== */
@@ -559,6 +568,7 @@ const SHOP = [
 ];
 function renderShop() {
   const boxEl = $('#shopList');
+  if (!boxEl) return;
   boxEl.innerHTML = '';
   for (const it of SHOP) {
     const lv = save.items[it.id] | 0;
@@ -572,11 +582,11 @@ function renderShop() {
       '<div class="ds">' + it.d + '</div></div>' +
       '<button class="btn ' + (full ? 'ghost' : 'alt') + ' small">' + (full ? 'Куплено' : '🪙 ' + price) + '</button>';
     if (!full) {
-      const priceNow = price;
+      const priceNow = price, id = it.id, lvNow = lv;
       el.querySelector('button').addEventListener('click', () => {
         if (save.coins < priceNow) { sfx.lose(); return; }
         save.coins -= priceNow;
-        save.items[it.id] = lv + 1;
+        save.items[id] = lvNow + 1;
         save.stats.purchases++;
         sfx.buy(); vib(30); persist(); checkAch(); renderShop(); updateCoins();
       });
@@ -586,15 +596,17 @@ function renderShop() {
   updateCoins();
 }
 function updateCoins() {
-  $('#menuCoins').textContent = save.coins;
-  $('#menuStars').textContent = totalStars();
-  $('#levelsCoins').textContent = save.coins;
-  $('#shopCoins').textContent = save.coins;
+  const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+  set('#menuCoins', save.coins);
+  set('#menuStars', totalStars());
+  set('#levelsCoins', save.coins);
+  set('#shopCoins', save.coins);
 }
 
 /* ===================== достижения UI ===================== */
 function renderAch() {
   const boxEl = $('#achList');
+  if (!boxEl) return;
   boxEl.innerHTML = '';
   for (const a of ACH) {
     const cur = Math.min(a.goal, a.v(save));
@@ -610,17 +622,19 @@ function renderAch() {
       '</div>';
     boxEl.appendChild(el);
   }
-  $('#achDone').textContent = achDone();
-  $('#achTotal').textContent = ACH.length;
+  const d = $('#achDone'), t = $('#achTotal');
+  if (d) d.textContent = achDone();
+  if (t) t.textContent = ACH.length;
 }
 
 /* ===================== экраны ===================== */
-function hideAllScreens() { ['#menu', '#levels', '#shop', '#ach', '#settings'].forEach(s => $(s).classList.add('hidden')); }
-function hideOverlays() { ['#ovPause', '#ovWin', '#ovLose'].forEach(s => $(s).classList.add('hidden')); }
-function showHud(on) { $('#hud').classList.toggle('hidden', !on); }
+function hideAllScreens() { ['#menu', '#levels', '#shop', '#ach', '#settings'].forEach(s => { const e = $(s); if (e) e.classList.add('hidden'); }); }
+function hideOverlays() { ['#ovPause', '#ovWin', '#ovLose'].forEach(s => { const e = $(s); if (e) e.classList.add('hidden'); }); }
+function showHud(on) { const e = $('#hud'); if (e) e.classList.toggle('hidden', !on); }
 function showScreen(id) {
   hideAllScreens(); hideOverlays(); showHud(false);
-  $(id).classList.remove('hidden');
+  const e = $(id);
+  if (e) e.classList.remove('hidden');
   state = 'menu'; stopMusic();
   if (id === '#levels') renderLevels();
   if (id === '#shop') renderShop();
@@ -630,28 +644,33 @@ function showScreen(id) {
 }
 function renderLevels() {
   const g = $('#levelsGrid');
+  if (!g) return;
   g.innerHTML = '';
   for (let i = 1; i <= 50; i++) {
     const open = i <= save.unlocked;
     const st = save.stars[i] | 0;
     const el = document.createElement('div');
     el.className = 'lvl' + (open ? ' open' : ' locked');
-    el.innerHTML = (open ? i : '🔒') + '<div class="st">' + (st ? '★'.repeat(st) : '') + '</div>';
+    el.innerHTML = '<span class="n">' + (open ? i : '🔒') + '</span><div class="st">' + (st ? '★'.repeat(st) : '') + '</div>';
     if (open) el.addEventListener('click', () => { sfx.tap(); startLevel(i); });
     g.appendChild(el);
   }
 }
 function renderSettings() {
-  $('#swSound').classList.toggle('on', save.settings.sound);
-  $('#swMusic').classList.toggle('on', save.settings.music);
-  $('#swVibe').classList.toggle('on', save.settings.vibe);
-  $('#setInfo').textContent = 'Пройдено уровней: ' + save.stats.levels + ' · Звёзд: ' + totalStars() + '/150 · Свиней: ' + save.stats.kills;
+  const on = (id, v) => { const e = $(id); if (e) e.classList.toggle('on', v); };
+  on('#swSound', save.settings.sound);
+  on('#swMusic', save.settings.music);
+  on('#swVibe', save.settings.vibe);
+  const i = $('#setInfo');
+  if (i) i.textContent = 'Пройдено уровней: ' + save.stats.levels + ' · Звёзд: ' + totalStars() + '/150 · Свиней: ' + save.stats.kills;
 }
 function updateHud() {
-  $('#hudLevel').textContent = 'Уровень ' + level;
-  $('#hudScore').textContent = score;
-  $('#hudPigs').textContent = '🐷 ' + pigsAlive;
+  const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
+  set('#hudLevel', 'Уровень ' + level);
+  set('#hudScore', score);
+  set('#hudPigs', '🐷 ' + pigsAlive);
   const hb = $('#hudBirds');
+  if (!hb) return;
   hb.innerHTML = '';
   const all = [];
   if (current) all.push(current);
@@ -661,45 +680,6 @@ function updateHud() {
     d.className = 'pip ' + k;
     hb.appendChild(d);
   }
-}
-
-/* ===================== ввод ===================== */
-let pointerId = null;
-function pos(e) {
-  const r = cv.getBoundingClientRect();
-  const k = 1 / SCALE;
-  return { x: (e.clientX - r.left) * k + cam.x, y: (e.clientY - r.top) * k + camY() };
-}
-function onDown(e) {
-  audio();
-  if (state === 'aim' && current) {
-    const p = pos(e);
-    const s = birdAtSling();
-    if (Math.hypot(p.x - s.x, p.y - s.y) < 200) {
-      pointerId = e.pointerId;
-      drag = { x: p.x, y: p.y };
-    }
-  } else if (state === 'fly') {
-    useAbility();
-  }
-}
-function onMove(e) {
-  if (drag === null || e.pointerId !== pointerId) return;
-  const p = pos(e);
-  const s = birdAtSling();
-  let dx = p.x - s.x, dy = p.y - s.y;
-  const d = Math.hypot(dx, dy), max = 145;
-  if (d > max) { dx = dx / d * max; dy = dy / d * max; }
-  drag.x = s.x + dx; drag.y = s.y + dy;
-}
-function onUp(e) {
-  if (drag === null || e.pointerId !== pointerId) return;
-  const s = birdAtSling();
-  const dx = s.x - drag.x, dy = s.y - drag.y;
-  const d = Math.hypot(dx, dy);
-  drag = null; pointerId = null;
-  if (d < 18) return;
-  shoot(dx, dy);
 }
 
 /* ===================== цикл ===================== */
@@ -930,6 +910,7 @@ function drawTrajectory() {
   }
 }
 function draw() {
+  if (!ctx) return;
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
   drawSky();
@@ -967,72 +948,3 @@ function frame(ts) {
   draw();
   requestAnimationFrame(frame);
 }
-
-/* ===================== кнопки и запуск ===================== */
-function goMenu() { showScreen('#menu'); updateCoins(); }
-function togglePause() {
-  if (state === 'aim' || state === 'fly') {
-    $('#ovPause').classList.remove('hidden');
-    state = 'pause';
-  } else if (state === 'pause') {
-    $('#ovPause').classList.add('hidden');
-    state = current ? 'aim' : 'fly';
-  }
-}
-function bind() {
-  $('#btnPlay').addEventListener('click', () => { sfx.tap(); showScreen('#levels'); });
-  $('#btnShop').addEventListener('click', () => { sfx.tap(); showScreen('#shop'); });
-  $('#btnAch').addEventListener('click', () => { sfx.tap(); showScreen('#ach'); });
-  $('#btnSettings').addEventListener('click', () => { sfx.tap(); showScreen('#settings'); });
-  $('#btnLevelsBack').addEventListener('click', goMenu);
-  $('#btnShopBack').addEventListener('click', goMenu);
-  $('#btnAchBack').addEventListener('click', goMenu);
-  $('#btnSettingsBack').addEventListener('click', goMenu);
-  $('#swSound').addEventListener('click', () => { save.settings.sound = !save.settings.sound; persist(); renderSettings(); if (save.settings.sound) sfx.tap(); });
-  $('#swMusic').addEventListener('click', () => { save.settings.music = !save.settings.music; persist(); renderSettings(); if (save.settings.music) startMusic(); else stopMusic(); });
-  $('#swVibe').addEventListener('click', () => { save.settings.vibe = !save.settings.vibe; persist(); renderSettings(); vib(30); });
-  $('#btnReset').addEventListener('click', () => {
-    save = defaultSave(); persist(); renderSettings(); updateCoins();
-    tone(300, 0.3, 'sawtooth', 0.12);
-  });
-  $('#btnPause').addEventListener('click', togglePause);
-  $('#btnResume').addEventListener('click', togglePause);
-  $('#btnRestart').addEventListener('click', () => startLevel(level));
-  $('#btnQuitP').addEventListener('click', goMenu);
-  $('#btnReplay').addEventListener('click', () => startLevel(level));
-  $('#btnQuitW').addEventListener('click', goMenu);
-  $('#btnNext').addEventListener('click', () => startLevel(Math.min(50, level + 1)));
-  $('#btnRetry').addEventListener('click', () => startLevel(level));
-  $('#btnQuitL').addEventListener('click', goMenu);
-
-  cv.addEventListener('pointerdown', onDown);
-  cv.addEventListener('pointermove', onMove);
-  cv.addEventListener('pointerup', onUp);
-  cv.addEventListener('pointercancel', onUp);
-  window.addEventListener('resize', resize);
-  window.addEventListener('orientationchange', () => setTimeout(resize, 250));
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && (state === 'aim' || state === 'fly')) togglePause();
-  });
-
-  window.onAndroidBack = function () {
-    if (!$('#ovWin').classList.contains('hidden') || !$('#ovLose').classList.contains('hidden') || !$('#ovPause').classList.contains('hidden')) { goMenu(); return; }
-    if (state === 'aim' || state === 'fly') { togglePause(); return; }
-    if (!$('#menu').classList.contains('hidden')) return;
-    goMenu();
-  };
-  window.onAndroidPause = function () { if (state === 'aim' || state === 'fly') togglePause(); };
-}
-function init() {
-  cv = $('#cv');
-  ctx = cv.getContext('2d');
-  resize();
-  for (let i = 0; i < 10; i++) clouds.push({ x: Math.random() * 2600, y: 40 + Math.random() * 190, r: 26 + Math.random() * 32 });
-  bind();
-  updateCoins();
-  showScreen('#menu');
-  last = performance.now();
-  requestAnimationFrame(frame);
-}
-document.addEventListener('DOMContentLoaded', init);
-})();
