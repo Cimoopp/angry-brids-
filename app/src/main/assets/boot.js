@@ -1,5 +1,5 @@
 /* ============================================================
-   ANGRY BIRDS — запуск, игровой цикл, связь с Android
+   ANGRY BIRDS — запуск, игровой цикл, мост к Android
    ============================================================ */
 (function () {
 'use strict';
@@ -13,7 +13,15 @@ function fatal(msg) {
     'background:#0a0e1a;text-align:center;line-height:1.5">' + msg + '</div>';
 }
 
-if (!G || !R || !UI) { fatal('Не загрузились модули игры. Проверь файлы assets.'); return; }
+/* Подключаем патч логики и вёрстки (fix.js) — он должен идти после модулей. */
+(function loadFix() {
+  var s = document.createElement('script');
+  s.src = 'fix.js';
+  s.onerror = function () { console.warn('fix.js не загрузился'); };
+  document.head.appendChild(s);
+})();
+
+if (!G || !R || !UI) { fatal('Модули игры не загрузились. Проверь файлы в assets.'); return; }
 
 var last = 0, started = false;
 
@@ -31,7 +39,7 @@ function frame(ts) {
       p.vy += 900 * dt;
       p.x += p.vx * dt; p.y += p.vy * dt;
       p.life -= dt;
-      if (p.life <= 0 || p.y > G.GROUND_Y + 80) G.parts.splice(i, 1);
+      if (p.life <= 0 || p.y > G.GROUND_Y + 90) G.parts.splice(i, 1);
     }
     for (i = G.pops.length - 1; i >= 0; i--) {
       G.pops[i].t -= dt * 0.9;
@@ -41,9 +49,10 @@ function frame(ts) {
     if (G.flying) {
       var f = G.flying;
       var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
-      if (sp < 45 && f.y + f.r >= G.GROUND_Y - 1) f.still = (f.still || 0) + dt;
+      var onGround = f.y + f.r >= G.GROUND_Y - 1.5;
+      if (sp < 45 && onGround) f.still = (f.still || 0) + dt;
       else f.still = 0;
-      if (f.x < -80 || f.x > G.WORLD_W + 80 || f.y > G.GROUND_Y + 100 || f.still > 1) {
+      if (f.x < -90 || f.x > G.WORLD_W + 90 || f.y > G.GROUND_Y + 120 || f.still > 0.85) {
         G.flying = null;
         G.nextBird();
         UI.syncHud();
@@ -55,8 +64,8 @@ function frame(ts) {
     for (i = G.extraFlyers.length - 1; i >= 0; i--) {
       var e = G.extraFlyers[i];
       var s2 = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
-      if (e.x < -80 || e.x > G.WORLD_W + 80 || e.y > G.GROUND_Y + 100 ||
-          (s2 < 45 && e.y + e.r >= G.GROUND_Y - 1)) G.extraFlyers.splice(i, 1);
+      if (e.x < -90 || e.x > G.WORLD_W + 90 || e.y > G.GROUND_Y + 120 ||
+          (s2 < 45 && e.y + e.r >= G.GROUND_Y - 1.5)) G.extraFlyers.splice(i, 1);
     }
 
     var res = G.checkEnd(dt);
@@ -75,6 +84,7 @@ function start() {
   if (started) return;
   if (!UI.init()) { fatal('Не удалось запустить игру.'); return; }
   started = true;
+  G.state = 'menu';
   R.setCam(0); R.snap();
   if (G.save && G.save.music) G.musicStart();
   requestAnimationFrame(frame);
@@ -98,8 +108,13 @@ window.onAndroidResume = function () {
 
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) window.onAndroidPause();
-  else if (window.onAndroidResume) window.onAndroidResume();
+  else window.onAndroidResume();
 });
+
+/* ---------- блокируем лишние жесты ---------- */
+document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+document.addEventListener('dblclick', function (e) { e.preventDefault(); });
 
 /* ---------- старт ---------- */
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
