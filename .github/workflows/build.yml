@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -32,7 +32,8 @@ jobs:
       - name: Prepare APK file
         run: |
           mkdir -p release
-          cp app/build/outputs/apk/debug/*.apk release/angry-birds.apk
+          APK="$(ls app/build/outputs/apk/debug/*.apk | head -n 1)"
+          cp "$APK" release/angry-birds.apk
           ls -lh release
 
       - name: Upload APK artifact
@@ -41,8 +42,10 @@ jobs:
           name: angry-birds-apk
           path: release/angry-birds.apk
 
-      - name: Remove previous release
-        run: gh release delete apk-latest --yes --cleanup-tag || true
+      - name: Reset previous release
+        run: |
+          gh release delete apk-latest --yes || true
+          gh api --method DELETE "repos/${{ github.repository }}/git/refs/tags/apk-latest" || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
