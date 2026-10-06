@@ -1,12 +1,24 @@
-/* ANGRY BIRDS — запуск, игровой цикл, связь с Android. Экспорт: window.AB */
+/* ============================================================
+   ANGRY BIRDS — запуск, игровой цикл, связь с Android
+   ============================================================ */
 (function () {
 'use strict';
-var G = window.ABG, R = window.ABR, U = window.ABU;
-if (!G || !R || !U) { console.error('не все модули загружены'); return; }
 
-var last = 0, lastAlive = -1, ready = false;
+var G = window.ABG, R = window.ABR, UI = window.ABUI;
 
-function tick(ts) {
+function fatal(msg) {
+  document.body.innerHTML =
+    '<div style="position:fixed;inset:0;display:flex;align-items:center;' +
+    'justify-content:center;padding:24px;font:16px sans-serif;color:#fff;' +
+    'background:#0a0e1a;text-align:center;line-height:1.5">' + msg + '</div>';
+}
+
+if (!G || !R || !UI) { fatal('Не загрузились модули игры. Проверь файлы assets.'); return; }
+
+var last = 0, started = false;
+
+function frame(ts) {
+  if (!last) last = ts;
   var dt = Math.min(0.033, ((ts - last) / 1000) || 0.016);
   last = ts;
   var i, p;
@@ -16,90 +28,84 @@ function tick(ts) {
 
     for (i = G.parts.length - 1; i >= 0; i--) {
       p = G.parts[i];
-      p.vy += 950 * dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
+      p.vy += 900 * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
       p.life -= dt;
-      if (p.life <= 0 || p.y > G.GROUND_Y + 60) G.parts.splice(i, 1);
+      if (p.life <= 0 || p.y > G.GROUND_Y + 80) G.parts.splice(i, 1);
     }
     for (i = G.pops.length - 1; i >= 0; i--) {
-      G.pops[i].t -= dt * 0.85;
+      G.pops[i].t -= dt * 0.9;
       if (G.pops[i].t <= 0) G.pops.splice(i, 1);
     }
 
     if (G.flying) {
       var f = G.flying;
       var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
-      var off = f.x < -80 || f.x > G.WORLD_W + 80 || f.y > G.GROUND_Y + 100;
-      if (sp < 45 && f.y + f.r >= G.GROUND_Y - 2) f.still = (f.still || 0) + dt;
+      if (sp < 45 && f.y + f.r >= G.GROUND_Y - 1) f.still = (f.still || 0) + dt;
       else f.still = 0;
-      if (off || f.still > 0.9) { G.flying = null; G.nextBird(); }
-      else R.follow(f.x, dt);
+      if (f.x < -80 || f.x > G.WORLD_W + 80 || f.y > G.GROUND_Y + 100 || f.still > 1) {
+        G.flying = null;
+        G.nextBird();
+        UI.syncHud();
+      } else {
+        R.follow(f.x);
+      }
     }
 
     for (i = G.extraFlyers.length - 1; i >= 0; i--) {
-      var eb = G.extraFlyers[i];
-      var sp2 = Math.sqrt(eb.vx * eb.vx + eb.vy * eb.vy);
-      if (eb.x < -80 || eb.x > G.WORLD_W + 80 || eb.y > G.GROUND_Y + 100 ||
-          (sp2 < 45 && eb.y + eb.r >= G.GROUND_Y - 2)) G.extraFlyers.splice(i, 1);
+      var e = G.extraFlyers[i];
+      var s2 = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+      if (e.x < -80 || e.x > G.WORLD_W + 80 || e.y > G.GROUND_Y + 100 ||
+          (s2 < 45 && e.y + e.r >= G.GROUND_Y - 1)) G.extraFlyers.splice(i, 1);
     }
 
     var res = G.checkEnd(dt);
-    if (res === 'win') U.onWin();
-    else if (res === 'lose') U.onLose();
+    if (res === 'win') UI.onWin();
+    else if (res === 'lose') UI.onLose();
 
-    var alive = G.alivePigs();
-    if (alive !== lastAlive) { lastAlive = alive; U.syncHud(); }
+    UI.syncScore();
   }
 
-  R.updateClouds(dt);
+  R.tick(dt);
   R.draw();
-
-  var hs = document.getElementById('hudScore');
-  if (hs) hs.textContent = G.score;
-
-  requestAnimationFrame(tick);
+  requestAnimationFrame(frame);
 }
 
-/* ---------- хуки для Android ---------- */
+function start() {
+  if (started) return;
+  if (!UI.init()) { fatal('Не удалось запустить игру.'); return; }
+  started = true;
+  R.setCam(0); R.snap();
+  if (G.save && G.save.music) G.musicStart();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- мост для MainActivity.java ---------- */
 window.onAndroidBack = function () {
-  if (G.state === 'play') { U.pauseGame(); return true; }
-  if (G.state === 'pause') { U.resumeGame(); return true; }
-  if (G.state === 'menu') return false;
-  U.goMenu();
-  return true;
+  try { return UI.onBack(); } catch (e) { return false; }
 };
 
 window.onAndroidPause = function () {
-  if (G.state === 'play') U.pauseGame();
+  try { UI.pause(); } catch (e) { /* игнор */ }
   G.musicStop();
+  return true;
 };
 
 window.onAndroidResume = function () {
-  if (G.save.music && G.state === 'play') G.musicStart();
+  if (G.save && G.save.music && G.state !== 'play') G.musicStart();
+  return true;
 };
 
-/* ---------- старт ---------- */
-function boot() {
-  if (ready) return;
-  ready = true;
-  if (!R.init()) { console.error('canvas не найден'); return; }
-  U.init();
-  last = performance.now();
-  requestAnimationFrame(tick);
-}
-
-window.addEventListener('resize', function () { R.resize(); });
-window.addEventListener('orientationchange', function () { setTimeout(function () { R.resize(); }, 250); });
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) window.onAndroidPause();
+  else if (window.onAndroidResume) window.onAndroidResume();
 });
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', boot);
+/* ---------- старт ---------- */
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  setTimeout(start, 0);
 } else {
-  boot();
+  window.addEventListener('load', start);
 }
 
-window.AB = { boot: boot };
 })();
