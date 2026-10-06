@@ -52,6 +52,6 @@ jobs:
         with:
           tag_name: apk-latest
           name: Angry Birds — свежая сборка
-          body: Автоматическая сборка из ветки main.
+          body: Автоматическая сборка из ветки main. Скачай angry-birds.apk и установи на телефон.
           files: release/angry-birds.apk
           make_latest: true
