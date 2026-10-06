@@ -1,24 +1,26 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
 }
 
 android {
-    namespace 'com.cimoopp.angrybirds'
+    namespace 'com.cim.angrybirds'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.cimoopp.angrybirds"
-        minSdk 24
+        applicationId "com.cim.angrybirds"
+        minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
     }
 
     buildTypes {
+        debug {
+            debuggable true
+        }
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.debug
         }
     }
 
@@ -27,16 +29,7 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = '17'
+    aaptOptions {
+        noCompress 'html', 'js', 'json'
     }
-
-    buildFeatures {
-        buildConfig false
-    }
-}
-
-dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
 }
