@@ -22,6 +22,16 @@
     }
   }
 
+  /* Android сворачивает приложение — ставим игру на паузу */
+  window.onAndroidPause = function () {
+    try {
+      if (window.AB && typeof window.AB.state === 'function' && window.AB.state() === 'play') {
+        var b = document.getElementById('btnPause');
+        if (b) b.click();
+      }
+    } catch (e) {}
+  };
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
   } else {
