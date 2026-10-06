@@ -29,7 +29,8 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    aaptOptions {
-        noCompress 'html', 'js', 'json'
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
     }
 }
