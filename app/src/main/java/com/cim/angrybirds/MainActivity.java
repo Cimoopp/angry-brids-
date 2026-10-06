@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -66,7 +67,18 @@ public class MainActivity extends Activity {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK && web != null) {
-            web.evaluateJavascript("window.onAndroidBack && window.onAndroidBack();", null);
+            // Спрашиваем у игры, обработала ли она «назад».
+            // В меню игра отвечает false — тогда выходим из приложения.
+            web.evaluateJavascript(
+                    "(function(){try{return !!(window.onAndroidBack && window.onAndroidBack());}catch(e){return false;}})()",
+                    new ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String value) {
+                            if (!"true".equals(value)) {
+                                finish();
+                            }
+                        }
+                    });
             return true;
         }
         return super.onKeyDown(keyCode, event);
@@ -88,5 +100,14 @@ public class MainActivity extends Activity {
             web.onResume();
         }
         hideSystemUi();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (web != null) {
+            web.destroy();
+            web = null;
+        }
+        super.onDestroy();
     }
 }
