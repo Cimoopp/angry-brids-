@@ -1,51 +1,65 @@
-/* ANGRY BIRDS — экраны, кнопки, ввод. Экспорт: window.ABU */
+/* ============================================================
+   ANGRY BIRDS — экраны, кнопки, ввод. Экспорт: window.ABUI
+   ============================================================ */
 (function () {
 'use strict';
+
 var G = window.ABG, R = window.ABR;
-if (!G || !R) { console.error('нужны ABG и ABR'); return; }
+if (!G || !R) { console.error('нет ABG/ABR'); return; }
 
 function $(s) { return document.querySelector(s); }
+function byId(id) { return document.getElementById(id); }
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
-function setText(id, v) { var el = $('#' + id); if (el) el.textContent = v; }
 
 var SCREENS = ['menu', 'levels', 'shop', 'ach', 'settings'];
-var OVERLAYS = ['ovPause', 'ovWin', 'ovLose'];
+var OVS = ['ovPause', 'ovWin', 'ovLose'];
 var dragging = false;
 
-/* ---------- экраны ---------- */
-function hideOverlays() {
-  OVERLAYS.forEach(function (id) { var el = $('#' + id); if (el) el.classList.add('hidden'); });
+function set(id, v) { var e = byId(id); if (e) e.textContent = v; }
+function hideOv() {
+  for (var i = 0; i < OVS.length; i++) {
+    var e = byId(OVS[i]);
+    if (e) e.classList.add('hidden');
+  }
 }
-
-function refreshMoney() {
-  setText('menuCoins', G.save.coins);
-  setText('menuStars', G.starsTotal());
-  setText('levelsCoins', G.save.coins);
-  setText('shopCoins', G.save.coins);
-  setText('achDone', G.achCount());
-  setText('achTotal', G.ACH.length);
+function hud(show) {
+  var h = byId('hud');
+  if (h) h.classList.toggle('hidden', !show);
 }
 
 function showScreen(name) {
-  SCREENS.forEach(function (id) {
-    var el = document.getElementById(id);
-    if (el) el.classList.toggle('hidden', id !== name);
-  });
-  var hud = $('#hud');
-  if (hud) hud.classList.toggle('hidden', !!name);
-  if (name === 'levels') renderLevels();
-  if (name === 'shop') renderShop();
-  if (name === 'ach') renderAch();
-  if (name === 'settings') renderSettings();
-  refreshMoney();
+  var i, el;
+  for (i = 0; i < SCREENS.length; i++) {
+    el = byId(SCREENS[i]);
+    if (el) el.classList.toggle('hidden', SCREENS[i] !== name);
+  }
+  if (name) {
+    hud(false);
+    if (name === 'levels') renderLevels();
+    if (name === 'shop') renderShop();
+    if (name === 'ach') renderAch();
+    if (name === 'settings') renderSettings();
+  }
+  money();
 }
 
+function money() {
+  set('menuCoins', G.save.coins);
+  set('menuStars', G.starsTotal());
+  set('levelsCoins', G.save.coins);
+  set('shopCoins', G.save.coins);
+  set('achDone', G.achCount());
+  set('achTotal', G.ACH.length);
+}
+
+/* ---------- экраны ---------- */
 function renderLevels() {
-  var grid = $('#levelsGrid');
+  var grid = byId('levelsGrid');
   if (!grid) return;
   var open = G.maxUnlocked(), html = '', i, k;
   for (i = 1; i <= G.TOTAL_LEVELS; i++) {
-    var st = G.save.levels[i] | 0, isOpen = i <= open, stars = '';
+    var st = G.save.levels[i] | 0;
+    var isOpen = i <= open, stars = '';
     for (k = 0; k < 3; k++) stars += (k < st ? '★' : '·');
     html += '<div class="lvl ' + (isOpen ? 'open' : 'locked') + '" data-lvl="' + i + '">' +
             (isOpen ? i : '🔒') +
@@ -64,7 +78,7 @@ function renderLevels() {
 }
 
 function renderShop() {
-  var list = $('#shopList');
+  var list = byId('shopList');
   if (!list) return;
   var html = '', i;
   for (i = 0; i < G.ITEMS.length; i++) {
@@ -73,23 +87,22 @@ function renderShop() {
       '<div class="ico">' + it.ic + '</div>' +
       '<div class="txt"><div class="nm">' + it.t + '</div>' +
       '<div class="ds">' + it.d + '</div></div>' +
-      '<button class="btn small ' + (owned ? 'ghost' : '') + '" data-item="' + it.id + '"' +
+      '<button class="btn small' + (owned ? ' ghost' : '') + '" data-item="' + it.id + '"' +
       (owned ? ' disabled' : '') + '>' + (owned ? 'Куплено' : '🪙 ' + it.p) + '</button></div>';
   }
   list.innerHTML = html;
   var btns = list.querySelectorAll('button[data-item]');
   for (i = 0; i < btns.length; i++) {
     btns[i].addEventListener('click', function () {
-      if (G.buy(this.getAttribute('data-item')) !== 'ok') { G.SFX.hit(); return; }
-      G.SFX.star();
-      renderShop();
-      refreshMoney();
+      var res = G.buy(this.getAttribute('data-item'));
+      if (res !== 'ok') { G.SFX.hit(); return; }
+      G.SFX.star(); renderShop(); money();
     });
   }
 }
 
 function renderAch() {
-  var list = $('#achList');
+  var list = byId('achList');
   if (!list) return;
   var html = '', i;
   for (i = 0; i < G.ACH.length; i++) {
@@ -104,136 +117,140 @@ function renderAch() {
 }
 
 function renderSettings() {
-  var a = $('#swSound'); if (a) a.classList.toggle('on', !!G.save.sound);
-  var b = $('#swMusic'); if (b) b.classList.toggle('on', !!G.save.music);
-  var c = $('#swVibe'); if (c) c.classList.toggle('on', !!G.save.vibe);
-  var inf = $('#setInfo');
-  if (inf) {
-    inf.textContent = 'Пройдено: ' + G.levelsDone() + '/50 · Звёзд: ' +
-      G.starsTotal() + '/150 · Свиней: ' + G.save.kills;
-  }
+  var a = byId('swSound'), b = byId('swMusic'), c = byId('swVibe');
+  if (a) a.classList.toggle('on', !!G.save.sound);
+  if (b) b.classList.toggle('on', !!G.save.music);
+  if (c) c.classList.toggle('on', !!G.save.vibe);
+  var inf = byId('setInfo');
+  if (inf) inf.textContent = 'Пройдено: ' + G.levelsDone() + '/50 · Звёзд: ' +
+    G.starsTotal() + '/150 · Свиней: ' + G.save.kills;
 }
 
 function syncHud() {
-  setText('hudLevel', 'Уровень ' + G.level);
-  setText('hudPigs', '🐷 ' + G.alivePigs());
-  var hb = $('#hudBirds');
-  if (!hb) return;
-  var list = [], i, html = '';
-  if (G.active) list.push(G.active.type);
-  for (i = 0; i < G.birdsLeft.length; i++) list.push(G.birdsLeft[i]);
-  for (i = 0; i < list.length && i < 8; i++) html += '<div class="pip ' + list[i] + '"></div>';
-  hb.innerHTML = html;
+  set('hudLevel', 'Уровень ' + G.level);
+  set('hudPigs', '🐷 ' + G.alivePigs());
+  var hb = byId('hudBirds');
+  if (hb) {
+    var list = [], i, html = '';
+    if (G.active) list.push(G.active.type);
+    for (i = 0; i < G.birdsLeft.length; i++) list.push(G.birdsLeft[i]);
+    for (i = 0; i < list.length && i < 8; i++) html += '<div class="pip ' + list[i] + '"></div>';
+    hb.innerHTML = html;
+  }
 }
+function syncScore() { set('hudScore', G.score); }
 
-/* ---------- поток игры ---------- */
+/* ---------- уровни ---------- */
 function beginLevel(n) {
   G.startLevel(n);
-  R.setCam(0);
-  R.snapCam();
+  R.setCam(0); R.snap();
   dragging = false;
-  R.setDragging(false);
-  hideOverlays();
+  hideOv();
   showScreen(null);
-  syncHud();
+  hud(true);
+  syncHud(); syncScore();
 }
 
 function goMenu() {
   G.state = 'menu';
   G.musicStop();
-  hideOverlays();
+  dragging = false;
+  hideOv();
+  hud(false);
   showScreen('menu');
 }
 
 function onWin() {
-  var w = G.lastWin || { stars: 1, coins: 0, score: G.score };
-  var stars = $('#winStars');
-  if (stars) {
-    var html = '', i;
-    for (i = 0; i < 3; i++) html += (i < w.stars) ? '<span>★</span>' : '<span class="off">☆</span>';
-    stars.innerHTML = html;
-  }
-  setText('winScore', w.score);
-  setText('winCoins', w.coins);
-  var nb = $('#btnNext');
+  var w = G.lastWin || { stars: 1, coins: 50, score: G.score };
+  var el = byId('winStars'), html = '', i;
+  for (i = 0; i < 3; i++) html += (i < w.stars) ? '<span>★</span>' : '<span class="off">☆</span>';
+  if (el) el.innerHTML = html;
+  set('winScore', w.score);
+  set('winCoins', w.coins);
+  var nb = byId('btnNext');
   if (nb) nb.style.display = (G.level < G.TOTAL_LEVELS) ? '' : 'none';
-  var ov = $('#ovWin'); if (ov) ov.classList.remove('hidden');
-  var hud = $('#hud'); if (hud) hud.classList.add('hidden');
+  hud(false);
+  var ov = byId('ovWin');
+  if (ov) ov.classList.remove('hidden');
+  money();
 }
 
 function onLose() {
-  setText('losePigs', G.alivePigs());
-  var ov = $('#ovLose'); if (ov) ov.classList.remove('hidden');
-  var hud = $('#hud'); if (hud) hud.classList.add('hidden');
+  set('losePigs', G.alivePigs());
+  hud(false);
+  var ov = byId('ovLose');
+  if (ov) ov.classList.remove('hidden');
+  money();
 }
 
-function pauseGame() {
-  if (G.state !== 'play') return;
+function pause() {
+  if (G.state !== 'play') return false;
   G.state = 'pause';
-  var ov = $('#ovPause'); if (ov) ov.classList.remove('hidden');
+  var ov = byId('ovPause');
+  if (ov) ov.classList.remove('hidden');
+  return true;
 }
-
-function resumeGame() {
-  var ov = $('#ovPause'); if (ov) ov.classList.add('hidden');
+function resume() {
+  var ov = byId('ovPause');
+  if (ov) ov.classList.add('hidden');
   if (G.state === 'pause') G.state = 'play';
 }
 
 /* ---------- ввод ---------- */
-function down(e) {
+function onDown(cx, cy) {
   if (G.state !== 'play') return;
-  var t = (e.touches && e.touches.length) ? e.touches[0] : e;
-  var pt = R.toWorld(t.clientX, t.clientY);
   G.ac();
-  if (G.flying && !G.flying.used) { G.useAbility(); return; }
+  var pt = R.toWorld(cx, cy);
+  if (G.flying && G.flying.state === 'fly' && !G.flying.used) { G.useAbility(); return; }
   if (G.active && G.active.state === 'ready') {
     var dx = pt.x - G.active.x, dy = pt.y - G.active.y;
-    if (Math.sqrt(dx * dx + dy * dy) < 180) {
+    if (Math.sqrt(dx * dx + dy * dy) < 190) {
       dragging = true;
-      R.setDragging(true);
       G.SFX.pull();
-      move(pt);
+      drag(pt);
     }
   }
 }
 
-function move(pt) {
+function drag(pt) {
   var a = G.active;
   if (!a) return;
   var dx = pt.x - G.SLING_X, dy = pt.y - G.SLING_Y;
   var d = Math.sqrt(dx * dx + dy * dy);
-  if (d > G.MAX_PULL) { dx = dx / d * G.MAX_PULL; dy = dy / d * G.MAX_PULL; }
+  var mx = G.MAX_PULL, my = G.MAX_PULL * 0.85;
+  if (dx > mx) dx = mx; if (dx < -mx) dx = -mx;
+  if (dy > my) dy = my; if (dy < -my) dy = -my;
   a.x = G.SLING_X + dx;
   a.y = G.SLING_Y + dy;
 }
 
-function onMove(e) {
-  if (!dragging || G.state !== 'play') return;
-  var t = (e.touches && e.touches.length) ? e.touches[0] : e;
-  move(R.toWorld(t.clientX, t.clientY));
-  if (e.cancelable) e.preventDefault();
-}
-
-function up() {
+function onUp() {
   if (!dragging) return;
   dragging = false;
-  R.setDragging(false);
-  if (G.shoot()) R.setCam(G.flying.x - R.getViewW() * 0.42);
+  if (G.shoot() && G.flying) R.follow(G.flying.x);
 }
 
 function bindInput() {
-  var cv = document.getElementById('cv');
-  if (!cv) return;
-  cv.addEventListener('touchstart', down, { passive: true });
-  cv.addEventListener('touchmove', onMove, { passive: false });
-  cv.addEventListener('touchend', up, { passive: true });
-  cv.addEventListener('mousedown', down);
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', up);
+  var el = byId('cv');
+  if (!el) return;
+  el.addEventListener('touchstart', function (e) {
+    if (e.touches.length) onDown(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  el.addEventListener('touchmove', function (e) {
+    if (dragging && e.touches.length) { drag(R.toWorld(e.touches[0].clientX, e.touches[0].clientY)); if (e.cancelable) e.preventDefault(); }
+  }, { passive: false });
+  el.addEventListener('touchend', function () { onUp(); });
+  el.addEventListener('touchcancel', function () { dragging = false; onUp(); });
+
+  el.addEventListener('mousedown', function (e) { onDown(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', function (e) { if (dragging) drag(R.toWorld(e.clientX, e.clientY)); });
+  window.addEventListener('mouseup', function () { onUp(); });
 }
 
 /* ---------- кнопки ---------- */
 function bindButtons() {
-  function on(id, fn) { var el = $('#' + id); if (el) el.addEventListener('click', fn); }
+  var i;
+  function on(id, fn) { var e = byId(id); if (e) e.addEventListener('click', fn); }
 
   on('btnPlay', function () { G.SFX.click(); showScreen('levels'); });
   on('btnShop', function () { G.SFX.click(); showScreen('shop'); });
@@ -244,55 +261,65 @@ function bindButtons() {
   on('btnAchBack', function () { G.SFX.click(); showScreen('menu'); });
   on('btnSettingsBack', function () { G.SFX.click(); showScreen('menu'); });
 
-  on('swSound', function () {
-    G.save.sound = !G.save.sound; G.store(); G.SFX.click(); renderSettings();
-  });
+  on('swSound', function () { G.save.sound = !G.save.sound; G.store(); G.SFX.click(); renderSettings(); });
   on('swMusic', function () {
     G.save.music = !G.save.music; G.store(); renderSettings();
     if (G.save.music) G.musicStart(); else G.musicStop();
   });
-  on('swVibe', function () {
-    G.save.vibe = !G.save.vibe; G.store(); G.vibe(25); renderSettings();
-  });
-
+  on('swVibe', function () { G.save.vibe = !G.save.vibe; G.store(); G.vibe(20); renderSettings(); });
   on('btnReset', function () {
-    G.resetProgress();
-    renderSettings();
-    refreshMoney();
-    G.SFX.hit();
+    if (!confirm('Сбросить весь прогресс, монеты и достижения?')) return;
+    G.resetProgress(); renderSettings(); money();
   });
 
-  on('btnPause', pauseGame);
-  on('btnResume', resumeGame);
-  on('btnRestart', function () { resumeGame(); beginLevel(G.level); });
-  on('btnQuitP', function () { resumeGame(); goMenu(); });
+  on('btnPause', function () { G.SFX.click(); pause(); });
+  on('btnResume', function () { G.SFX.click(); resume(); });
+  on('btnRestart', function () { G.SFX.click(); resume(); beginLevel(G.level); });
+  on('btnQuitP', function () { G.SFX.click(); resume(); goMenu(); });
 
-  on('btnNext', function () { beginLevel(clamp(G.level + 1, 1, G.TOTAL_LEVELS)); });
-  on('btnReplay', function () { beginLevel(G.level); });
-  on('btnQuitW', goMenu);
-  on('btnRetry', function () { beginLevel(G.level); });
-  on('btnQuitL', goMenu);
+  on('btnNext', function () { G.SFX.click(); beginLevel(clamp(G.level + 1, 1, G.TOTAL_LEVELS)); });
+  on('btnReplay', function () { G.SFX.click(); beginLevel(G.level); });
+  on('btnQuitW', function () { G.SFX.click(); goMenu(); });
+  on('btnRetry', function () { G.SFX.click(); beginLevel(G.level); });
+  on('btnQuitL', function () { G.SFX.click(); goMenu(); });
+
+  var letters = document.querySelectorAll('.btn, .lvl');
+  for (i = 0; i < letters.length; i++) {
+    letters[i].addEventListener('touchstart', function () { this.style.transform = 'scale(.97)'; }, { passive: true });
+    letters[i].addEventListener('touchend', function () { this.style.transform = ''; });
+  }
 }
 
+/* ---------- запуск ---------- */
 function init() {
+  if (!R.init()) return false;
   bindButtons();
   bindInput();
-  goMenu();
-  refreshMoney();
+  window.addEventListener('resize', function () { R.resize(); });
+  window.addEventListener('orientationchange', function () { setTimeout(function () { R.resize(); }, 250); });
+  G.state = 'menu';
+  showScreen('menu');
+  return true;
 }
 
-window.ABU = {
-  init: init,
-  showScreen: showScreen,
-  beginLevel: beginLevel,
-  goMenu: goMenu,
-  onWin: onWin,
-  onLose: onLose,
-  pauseGame: pauseGame,
-  resumeGame: resumeGame,
-  syncHud: syncHud,
-  refreshMoney: refreshMoney,
-  isPlaying: function () { return G.state === 'play'; },
-  isOverlayOpen: function () { return G.state !== 'play'; }
+/* ---------- кнопка «Назад» на Android ---------- */
+function onBack() {
+  if (G.state === 'play') { pause(); return true; }
+  if (G.state === 'pause') { resume(); return true; }
+  if (G.state === 'over') { goMenu(); return true; }
+  var open = false, i;
+  for (i = 0; i < SCREENS.length; i++) {
+    var el = byId(SCREENS[i]);
+    if (el && !el.classList.contains('hidden') && SCREENS[i] !== 'menu') { open = true; }
+  }
+  if (open) { showScreen('menu'); return true; }
+  return false;
+}
+
+window.ABUI = {
+  init: init, beginLevel: beginLevel, goMenu: goMenu, onWin: onWin, onLose: onLose,
+  pause: pause, resume: resume, syncHud: syncHud, syncScore: syncScore,
+  isDragging: function () { return dragging; }, onBack: onBack, money: money
 };
+
 })();
