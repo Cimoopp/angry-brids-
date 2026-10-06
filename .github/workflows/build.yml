@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: '17'
 
       - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
@@ -51,11 +51,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-latest
-          name: Angry Birds — последняя сборка
-          body: |
-            Готовый APK игры Angry Birds.
-            Скачай файл ниже и установи на телефон.
+          name: Angry Birds — свежая сборка
+          body: Автоматическая сборка из ветки main.
           files: release/angry-birds.apk
           make_latest: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
