@@ -1,101 +1,105 @@
-/* ============================================================
-   ANGRY BIRDS — запуск, игровой цикл, связь с Android
-   Зависит от window.ABG, window.ABR, window.AB
-   ============================================================ */
+/* ANGRY BIRDS — запуск, игровой цикл, связь с Android. Экспорт: window.AB */
 (function () {
 'use strict';
-var G = window.ABG, R = window.ABR, UI = window.AB;
-if (!G || !R || !UI) { console.error('Модули не загружены'); return; }
+var G = window.ABG, R = window.ABR, U = window.ABU;
+if (!G || !R || !U) { console.error('не все модули загружены'); return; }
 
-var lastTs = 0, lastAlive = -1, winLock = false;
+var last = 0, lastAlive = -1, ready = false;
 
-function step(dt) {
+function tick(ts) {
+  var dt = Math.min(0.033, ((ts - last) / 1000) || 0.016);
+  last = ts;
   var i, p;
 
   if (G.state === 'play') {
     G.physics(dt);
 
-    // частицы
     for (i = G.parts.length - 1; i >= 0; i--) {
       p = G.parts[i];
-      p.vy += 900 * dt;
+      p.vy += 950 * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.life -= dt;
-      if (p.life <= 0 || p.y > G.GROUND_Y + 40) G.parts.splice(i, 1);
+      if (p.life <= 0 || p.y > G.GROUND_Y + 60) G.parts.splice(i, 1);
     }
-
-    // всплывающие очки
     for (i = G.pops.length - 1; i >= 0; i--) {
-      G.pops[i].t -= dt * 0.9;
+      G.pops[i].t -= dt * 0.85;
       if (G.pops[i].t <= 0) G.pops.splice(i, 1);
     }
 
-    // улетевшая птица
-    if (G.flying && G.flying.state === 'fly') {
+    if (G.flying) {
       var f = G.flying;
       var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
-      var gone = f.x < -60 || f.x > G.WORLD_W + 60 || f.y > G.GROUND_Y + 80;
-      if (sp < 40 && f.y + f.r >= G.GROUND_Y - 1) f.still = (f.still || 0) + dt;
+      var off = f.x < -80 || f.x > G.WORLD_W + 80 || f.y > G.GROUND_Y + 100;
+      if (sp < 45 && f.y + f.r >= G.GROUND_Y - 2) f.still = (f.still || 0) + dt;
       else f.still = 0;
-      if (gone || f.still > 0.9) { G.flying = null; G.nextBird(); }
+      if (off || f.still > 0.9) { G.flying = null; G.nextBird(); }
       else R.follow(f.x, dt);
     }
 
-    // осколки от синей птицы
     for (i = G.extraFlyers.length - 1; i >= 0; i--) {
       var eb = G.extraFlyers[i];
       var sp2 = Math.sqrt(eb.vx * eb.vx + eb.vy * eb.vy);
-      if (eb.x < -60 || eb.x > G.WORLD_W + 60 || eb.y > G.GROUND_Y + 80 ||
-          (sp2 < 40 && eb.y + eb.r >= G.GROUND_Y - 1)) G.extraFlyers.splice(i, 1);
+      if (eb.x < -80 || eb.x > G.WORLD_W + 80 || eb.y > G.GROUND_Y + 100 ||
+          (sp2 < 45 && eb.y + eb.r >= G.GROUND_Y - 2)) G.extraFlyers.splice(i, 1);
     }
 
-    if (!winLock) {
-      var res = G.checkEnd(dt);
-      if (res === 'win') { winLock = true; UI.onWin(); }
-      else if (res === 'lose') { winLock = true; UI.onLose(); }
-    }
+    var res = G.checkEnd(dt);
+    if (res === 'win') U.onWin();
+    else if (res === 'lose') U.onLose();
 
     var alive = G.alivePigs();
-    if (alive !== lastAlive) { lastAlive = alive; UI.syncHud(); }
+    if (alive !== lastAlive) { lastAlive = alive; U.syncHud(); }
   }
 
   R.updateClouds(dt);
-}
-
-function frame(ts) {
-  var dt = (ts - lastTs) / 1000;
-  if (!isFinite(dt) || dt <= 0) dt = 0.016;
-  if (dt > 0.033) dt = 0.033;
-  lastTs = ts;
-
-  step(dt);
   R.draw();
 
   var hs = document.getElementById('hudScore');
   if (hs) hs.textContent = G.score;
 
-  requestAnimationFrame(frame);
+  requestAnimationFrame(tick);
 }
 
-function startLevelReset() {
-  winLock = false;
-  lastAlive = -1;
-}
-
-// сброс блокировки при старте уровня
-var origBegin = UI.beginLevel;
-UI.beginLevel = function (n) { startLevelReset(); origBegin(n); };
-
-UI.init();
-requestAnimationFrame(function (ts) { lastTs = ts; frame(ts); });
-
-/* ---- вызовы из MainActivity ---- */
+/* ---------- хуки для Android ---------- */
 window.onAndroidBack = function () {
-  try { return !!UI.onBack(); } catch (e) { return false; }
+  if (G.state === 'play') { U.pauseGame(); return true; }
+  if (G.state === 'pause') { U.resumeGame(); return true; }
+  if (G.state === 'menu') return false;
+  U.goMenu();
+  return true;
 };
+
 window.onAndroidPause = function () {
-  try { UI.pauseGame(); } catch (e) { /* игнор */ }
+  if (G.state === 'play') U.pauseGame();
+  G.musicStop();
 };
-window.onAndroidResume = function () { /* цикл продолжает идти сам */ };
+
+window.onAndroidResume = function () {
+  if (G.save.music && G.state === 'play') G.musicStart();
+};
+
+/* ---------- старт ---------- */
+function boot() {
+  if (ready) return;
+  ready = true;
+  if (!R.init()) { console.error('canvas не найден'); return; }
+  U.init();
+  last = performance.now();
+  requestAnimationFrame(tick);
+}
+
+window.addEventListener('resize', function () { R.resize(); });
+window.addEventListener('orientationchange', function () { setTimeout(function () { R.resize(); }, 250); });
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) window.onAndroidPause();
+});
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', boot);
+} else {
+  boot();
+}
+
+window.AB = { boot: boot };
 })();
