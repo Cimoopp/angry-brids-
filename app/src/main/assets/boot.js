@@ -1,5 +1,6 @@
 /* ============================================================
    ANGRY BIRDS — запуск, игровой цикл, мост к Android
+   Требует: engine.js, engine2.js, render.js, ui.js, controls.js
    ============================================================ */
 (function () {
 'use strict';
@@ -7,98 +8,97 @@
 var G = window.ABG, R = window.ABR, U = window.ABUI, C = window.ABC;
 
 function fatal(msg) {
-  document.body.innerHTML =
-    '<div style="position:fixed;inset:0;display:flex;align-items:center;' +
-    'justify-content:center;padding:24px;font:16px/1.5 sans-serif;color:#fff;' +
-    'background:#0a0e1a;text-align:center">' + msg + '</div>';
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;z-index:999;display:flex;align-items:center;' +
+    'justify-content:center;padding:24px;background:#0a0e1a;color:#fff;' +
+    'font:15px/1.6 sans-serif;text-align:center;white-space:pre-wrap';
+  d.textContent = msg;
+  document.body.appendChild(d);
 }
 
 if (!G || !R || !U || !C) {
-  fatal('Модули игры не загрузились.<br><br>Проверь, что в assets лежат:<br>' +
-        'engine.js · engine2.js · render.js · ui.js · controls.js · boot.js');
+  fatal('Игра не запустилась.\n\n' +
+    'engine.js — ' + (G ? 'ок' : 'НЕ загружен') + '\n' +
+    'render.js — ' + (R ? 'ок' : 'НЕ загружен') + '\n' +
+    'ui.js — ' + (U ? 'ок' : 'НЕ загружен') + '\n' +
+    'controls.js — ' + (C ? 'ок' : 'НЕ загружен') + '\n\n' +
+    'Все файлы должны лежать в app/src/main/assets/');
   return;
 }
 
-/* ---------- счётчик выстрелов + сброс уровня ---------- */
-G.shots = 0;
+var last = 0, hudT = 0, started = false;
 
-var origStart = G.startLevel;
-G.startLevel = function (n) {
-  var res = origStart.call(G, n);
-  G.shots = 0;
-  G.ended = false;
-  G.winT = 0;
-  G.loseT = 0;
-  G.state = 'play';
-  return res;
-};
+/* ---------- частицы и всплывающие очки ---------- */
+function effects(dt) {
+  var i, p;
+  for (i = G.parts.length - 1; i >= 0; i--) {
+    p = G.parts[i];
+    p.vy += 900 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    if (p.life <= 0 || p.y > G.GROUND_Y + 140) G.parts.splice(i, 1);
+  }
+  for (i = G.pops.length - 1; i >= 0; i--) {
+    G.pops[i].t -= dt;
+    if (G.pops[i].t <= 0) G.pops.splice(i, 1);
+  }
+}
 
-var origShoot = G.shoot;
-G.shoot = function () {
-  var ok = origShoot.apply(G, arguments);
-  if (ok) G.shots++;
-  return ok;
-};
+/* ---------- полёт и камера ---------- */
+function flyers(dt) {
+  var f = G.flying;
+  if (f) {
+    var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
+    var onGround = f.y + f.r >= G.GROUND_Y - 2;
+    if (onGround && sp < 60) f.still = (f.still || 0) + dt;
+    else f.still = 0;
 
-/* ---------- игровой цикл ---------- */
-var last = 0, running = false;
-var hudCache = { pigs: -1, birds: -1, score: -1 };
+    if (f.x < -140 || f.x > G.WORLD_W + 140 || f.y > G.GROUND_Y + 180 || f.still > 0.7) {
+      G.nextBird();
+      U.syncHud();
+      R.setCam(G.SLING_X - 80);
+    } else {
+      R.follow(f.x);
+    }
+  } else {
+    R.setCam(G.SLING_X - 80);
+  }
 
+  var i, e, sp2;
+  for (i = G.extraFlyers.length - 1; i >= 0; i--) {
+    e = G.extraFlyers[i];
+    sp2 = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+    if (e.x < -140 || e.x > G.WORLD_W + 140 || e.y > G.GROUND_Y + 180 ||
+        (e.y + e.r >= G.GROUND_Y - 2 && sp2 < 60)) {
+      G.extraFlyers.splice(i, 1);
+    }
+  }
+}
+
+/* ---------- кадр ---------- */
 function frame(ts) {
   if (!last) last = ts;
-  var dt = Math.min(0.033, ((ts - last) / 1000) || 0.016);
+  var dt = (ts - last) / 1000;
   last = ts;
+  if (!(dt > 0)) dt = 0.016;
+  if (dt > 0.033) dt = 0.033;
 
   if (G.state === 'play') {
     G.physics(dt);
-
-    /* осколки */
-    for (var i = G.parts.length - 1; i >= 0; i--) {
-      var p = G.parts[i];
-      p.vy += 900 * dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.life -= dt;
-      if (p.life <= 0 || p.y > G.GROUND_Y + 120) G.parts.splice(i, 1);
-    }
-    for (var k = G.pops.length - 1; k >= 0; k--) {
-      G.pops[k].t -= dt * 0.9;
-      if (G.pops[k].t <= 0) G.pops.splice(k, 1);
-    }
-
-    /* приземлившаяся птица */
-    if (G.flying) {
-      var f = G.flying;
-      var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
-      var grounded = f.y + f.r >= G.GROUND_Y - 2;
-      f.still = (sp < 50 && grounded) ? f.still + dt : 0;
-      if (f.x < -100 || f.x > G.WORLD_W + 100 || f.y > G.GROUND_Y + 140 || f.still > 0.7) {
-        G.flying = null;
-        G.nextBird();
-        hudCache.birds = -1;
-      } else {
-        R.follow(f.x);
-      }
-    }
-
-    /* осколки синей птицы */
-    for (var j = G.extraFlyers.length - 1; j >= 0; j--) {
-      var e = G.extraFlyers[j];
-      var s2 = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
-      if (e.x < -100 || e.x > G.WORLD_W + 100 || e.y > G.GROUND_Y + 140 ||
-          (s2 < 50 && e.y + e.r >= G.GROUND_Y - 2)) G.extraFlyers.splice(j, 1);
-    }
-
-    /* обновляем HUD только при изменениях */
-    var pigs = G.alivePigs(), birds = G.birdsLeft.length + (G.active ? 1 : 0);
-    if (pigs !== hudCache.pigs || birds !== hudCache.birds || G.score !== hudCache.score) {
-      hudCache.pigs = pigs; hudCache.birds = birds; hudCache.score = G.score;
-      U.syncHud();
-    }
+    effects(dt);
+    flyers(dt);
 
     var res = G.checkEnd(dt);
     if (res === 'win') C.onWin();
     else if (res === 'lose') C.onLose();
+
+    hudT += dt;
+    if (hudT > 0.2) {
+      hudT = 0;
+      U.syncScore();
+      U.syncHud();
+    }
   }
 
   R.tick(dt);
@@ -108,19 +108,12 @@ function frame(ts) {
 
 /* ---------- запуск ---------- */
 function start() {
-  if (running) return;
-  if (!C.init()) { fatal('Не удалось запустить игру.'); return; }
-  running = true;
-
-  var wrap = document.getElementById('wrap');
-  if (wrap) wrap.style.display = 'flex';
-
-  R.setCam(0);
-  R.snap();
-
-  var hud = document.getElementById('hud');
-  if (hud) hud.style.display = 'none';
-
+  if (started) return;
+  if (!C.init()) {
+    fatal('Не удалось запустить игру: canvas недоступен.');
+    return;
+  }
+  started = true;
   if (G.save.music) G.musicStart();
   requestAnimationFrame(frame);
 }
@@ -137,7 +130,7 @@ window.onAndroidPause = function () {
 };
 
 window.onAndroidResume = function () {
-  if (G.save && G.save.music && G.state !== 'play') G.musicStart();
+  if (G.save.music) G.musicStart();
   return true;
 };
 
@@ -148,12 +141,10 @@ document.addEventListener('visibilitychange', function () {
 
 document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
 document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-document.addEventListener('dblclick', function (e) { e.preventDefault(); });
 
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  setTimeout(start, 0);
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', function () { setTimeout(start, 0); });
 } else {
-  window.addEventListener('load', start);
+  setTimeout(start, 0);
 }
-
 })();
