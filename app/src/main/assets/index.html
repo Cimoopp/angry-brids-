@@ -11,106 +11,123 @@
   html, body { width:100%; height:100%; overflow:hidden; background:#0a0e1a; color:#fff;
     font-family:-apple-system, "Roboto", "Segoe UI", sans-serif; }
 
+  .hidden { display:none !important; }
+
   #cv { position:fixed; inset:0; z-index:1; display:block; touch-action:none; }
 
   .screen { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:1.4vh; padding:2vh 3vw;
-    background:linear-gradient(180deg,#0b1224 0%,#16233d 55%,#0b1224 100%); overflow:hidden; }
+    align-items:center; justify-content:center; gap:clamp(8px,1.6vh,22px);
+    padding:clamp(10px,2.5vh,26px) clamp(10px,3vw,30px); overflow-y:auto;
+    background:linear-gradient(180deg,#0b1224 0%,#16233d 55%,#0b1224 100%); }
 
-  .title { font-size:clamp(26px,6vh,64px); font-weight:900; letter-spacing:.05em; color:#ffd34d;
+  .title { font-size:clamp(28px,6vh,64px); font-weight:900; letter-spacing:.06em; color:#ffd34d;
     text-shadow:0 4px 0 #a3341f, 0 8px 16px rgba(0,0,0,.6); text-align:center; }
-  .subtitle { font-size:clamp(11px,1.8vh,20px); letter-spacing:.28em; color:#8fa6c7;
+  .subtitle { font-size:clamp(11px,1.9vh,20px); letter-spacing:.3em; color:#8fa6c7;
     text-transform:uppercase; text-align:center; }
 
-  .btn { min-width:min(60vw,240px); max-width:min(86vw,420px); padding:1.3vh 3vw;
+  .btn { min-width:min(32vw,220px); padding:clamp(9px,1.5vh,18px) clamp(14px,3vw,32px);
     border:3px solid #ffcf5c; border-radius:14px;
     background:linear-gradient(180deg,#ff6a4d,#c62828); color:#fff;
-    font-size:clamp(13px,2.1vh,24px); font-weight:800; letter-spacing:.05em; text-transform:uppercase;
-    box-shadow:0 5px 0 #7a1414; cursor:pointer; }
-  .btn:active { transform:translateY(3px); box-shadow:0 2px 0 #7a1414; }
-  .btn.alt { background:linear-gradient(180deg,#4d7dff,#22409c); border-color:#8fb4ff; box-shadow:0 5px 0 #16296b; }
-  .btn.ghost { background:linear-gradient(180deg,#2b3a55,#1a2436); border-color:#4d6b96; box-shadow:0 5px 0 #0e1725; }
-  .btn.small { min-width:0; max-width:none; padding:1vh 3vw; font-size:clamp(12px,1.7vh,18px); }
+    font-size:clamp(13px,2.1vh,22px); font-weight:800; letter-spacing:.05em;
+    text-transform:uppercase; box-shadow:0 6px 0 #7a1414; cursor:pointer; }
+  .btn:active { transform:translateY(3px); box-shadow:0 3px 0 #7a1414; }
+  .btn.alt { background:linear-gradient(180deg,#4d7dff,#22409c); border-color:#8fb4ff;
+    box-shadow:0 6px 0 #16296b; }
+  .btn.ghost { background:linear-gradient(180deg,#2b3a55,#1a2436); border-color:#4d6b96;
+    box-shadow:0 6px 0 #0e1725; }
+  .btn.small { min-width:0; padding:clamp(7px,1.1vh,14px) clamp(10px,2.2vw,24px);
+    font-size:clamp(11px,1.7vh,18px); }
 
-  .topbar { position:absolute; top:1.6vh; left:3vw; right:3vw; display:flex;
-    align-items:center; justify-content:space-between; gap:2vw; }
-  .coinbox { font-size:clamp(12px,1.9vh,22px); font-weight:800; color:#ffd34d;
-    background:rgba(9,15,28,.75); border:2px solid #3a4d6b; border-radius:999px;
-    padding:.7vh 3vw; white-space:nowrap; }
+  .topbar { position:absolute; top:clamp(8px,2vh,20px); left:clamp(8px,3vw,26px);
+    right:clamp(8px,3vw,26px); display:flex; align-items:center; justify-content:space-between;
+    gap:10px; }
+  .coinbox { display:inline-flex; align-items:center; gap:6px; font-size:clamp(12px,2vh,20px);
+    font-weight:800; color:#ffd34d; background:rgba(9,15,28,.75);
+    border:2px solid #3a4d6b; border-radius:999px; padding:clamp(5px,.8vh,12px) clamp(10px,1.8vw,20px); }
 
-  .grid { display:grid; grid-template-columns:repeat(10, 1fr); gap:.9vh .8vw;
-    width:100%; max-width:min(94vw,720px); max-height:70vh; overflow-y:auto; }
-  .lvl { position:relative; aspect-ratio:1/1; border-radius:10px; border:2px solid #4d6b96;
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(clamp(38px,7vh,64px), 1fr));
+    gap:clamp(6px,1vh,14px); width:100%; max-width:min(94vw,900px); }
+  .lvl { position:relative; aspect-ratio:1/1; border-radius:12px; border:2px solid #4d6b96;
     background:linear-gradient(180deg,#2e3f5c,#1b2637); display:flex; flex-direction:column;
     align-items:center; justify-content:center; font-weight:900;
-    font-size:clamp(10px,1.8vh,20px); cursor:pointer; }
-  .lvl.open { border-color:#ffcf5c; background:linear-gradient(180deg,#ff7a4d,#c62828); box-shadow:0 3px 0 #7a1414; }
-  .lvl.locked { opacity:.5; }
-  .lvl .st { font-size:clamp(7px,1.2vh,13px); letter-spacing:.08em; color:#ffd34d; height:1.3vh; }
+    font-size:clamp(11px,2vh,20px); cursor:pointer; }
+  .lvl.open { border-color:#ffcf5c; background:linear-gradient(180deg,#ff7a4d,#c62828);
+    box-shadow:0 4px 0 #7a1414; }
+  .lvl.locked { opacity:.55; }
+  .lvl .st { font-size:clamp(7px,1.2vh,13px); letter-spacing:.08em; color:#ffd34d; margin-top:2px; }
   .lvl.locked .st { color:#7d8ba3; }
 
-  .list { width:100%; max-width:min(94vw,720px); max-height:66vh; overflow-y:auto;
-    display:flex; flex-direction:column; gap:1vh; padding-right:1vw; }
-  .card { display:flex; align-items:center; gap:1.5vw; padding:1.1vh 2.5vw; border-radius:14px;
-    background:linear-gradient(180deg,rgba(46,63,92,.85),rgba(21,32,50,.9)); border:2px solid #3a4d6b; }
-  .card .ico { width:clamp(30px,6vh,58px); height:clamp(30px,6vh,58px); flex:0 0 auto; border-radius:12px;
-    background:#0d1524; display:flex; align-items:center; justify-content:center;
-    font-size:clamp(15px,3vh,30px); }
+  .list { width:100%; max-width:min(92vw,720px); max-height:64vh; overflow-y:auto;
+    display:flex; flex-direction:column; gap:clamp(6px,1.1vh,14px); padding-right:4px; }
+  .card { display:flex; align-items:center; gap:clamp(8px,1.6vw,18px);
+    padding:clamp(7px,1.3vh,16px) clamp(9px,2vw,22px); border-radius:14px;
+    background:linear-gradient(180deg,rgba(46,63,92,.85),rgba(21,32,50,.9));
+    border:2px solid #3a4d6b; }
+  .card .ico { width:clamp(34px,6.4vh,58px); height:clamp(34px,6.4vh,58px); flex:0 0 auto;
+    border-radius:12px; background:#0d1524; display:flex; align-items:center;
+    justify-content:center; font-size:clamp(16px,3.2vh,30px); }
   .card .txt { flex:1 1 auto; min-width:0; }
-  .card .nm { font-size:clamp(12px,1.9vh,21px); font-weight:800; }
-  .card .ds { font-size:clamp(10px,1.5vh,17px); color:#93a7c4; margin-top:.2vh; }
+  .card .nm { font-size:clamp(12px,2vh,20px); font-weight:800; }
+  .card .ds { font-size:clamp(10px,1.6vh,16px); color:#93a7c4; margin-top:2px; }
   .card.done { border-color:#4bbf73; }
-  .card .lvlpips { font-size:clamp(9px,1.4vh,16px); color:#8fa6c7; white-space:nowrap; }
+  .card .lvlpips { font-size:clamp(10px,1.5vh,16px); color:#4bbf73; }
 
-  .rows { display:flex; flex-direction:column; gap:1.2vh; width:100%; max-width:min(88vw,560px); }
-  .sw { display:flex; align-items:center; justify-content:space-between; padding:1.2vh 3vw;
-    border-radius:14px; background:linear-gradient(180deg,rgba(46,63,92,.8),rgba(21,32,50,.9));
-    border:2px solid #3a4d6b; font-size:clamp(12px,2vh,22px); font-weight:700; cursor:pointer; }
-  .sw .dot { width:clamp(38px,7vh,66px); height:clamp(20px,3.4vh,34px); border-radius:999px;
-    background:#2b3a55; border:2px solid #4d6b96; position:relative; flex:0 0 auto; }
-  .sw .dot i { position:absolute; top:2px; left:3px; width:calc(50% - 4px); height:calc(100% - 8px);
-    border-radius:50%; background:#8fa6c7; transition:left .15s, background .15s; }
+  .rows { display:flex; flex-direction:column; gap:clamp(7px,1.4vh,16px); width:100%;
+    max-width:min(70vw,520px); }
+  .sw { display:flex; align-items:center; justify-content:space-between;
+    padding:clamp(8px,1.4vh,18px) clamp(10px,2vw,22px); border-radius:14px;
+    background:linear-gradient(180deg,rgba(46,63,92,.8),rgba(21,32,50,.9));
+    border:2px solid #3a4d6b; font-size:clamp(12px,2vh,20px); font-weight:700; cursor:pointer; }
+  .sw .dot { width:clamp(40px,7vh,64px); height:clamp(20px,3.4vh,32px); border-radius:999px;
+    background:#2b3a55; border:2px solid #4d6b96; position:relative; transition:background .15s; }
+  .sw .dot i { position:absolute; top:9%; left:6%; width:38%; height:78%; border-radius:50%;
+    background:#8fa6c7; transition:left .15s, background .15s; }
   .sw.on .dot { background:#1f7a45; border-color:#4bbf73; }
-  .sw.on .dot i { left:50%; background:#a8e063; }
+  .sw.on .dot i { left:54%; background:#a8e063; }
 
   #hud { position:fixed; inset:0; z-index:5; pointer-events:none; }
-  #hud .bar { position:absolute; top:1.4vh; left:2.5vw; right:2.5vw; display:flex;
-    align-items:center; gap:1.2vw; }
-  .chip { background:rgba(9,15,28,.7); border:2px solid #3a4d6b; border-radius:10px;
-    padding:.6vh 2.2vw; font-size:clamp(12px,2vh,22px); font-weight:800; color:#ffd34d; white-space:nowrap; }
+  #hud .bar { position:absolute; top:clamp(6px,1.6vh,16px); left:clamp(8px,2.5vw,24px);
+    right:clamp(8px,2.5vw,24px); display:flex; align-items:center; gap:clamp(6px,1.4vw,16px); }
+  .chip { background:rgba(9,15,28,.7); border:2px solid #3a4d6b; border-radius:12px;
+    padding:clamp(5px,.8vh,12px) clamp(9px,1.6vw,18px); font-size:clamp(12px,2vh,20px);
+    font-weight:800; color:#ffd34d; }
   #hud .spacer { flex:1 1 auto; }
   #btnPause { pointer-events:auto; background:rgba(9,15,28,.7); border:2px solid #3a4d6b;
-    border-radius:10px; color:#fff; font-size:clamp(13px,2.2vh,24px); padding:.5vh 3vw;
-    cursor:pointer; font-weight:800; }
-  #hud .units { position:absolute; bottom:1.4vh; left:2.5vw; display:flex; gap:1vw; align-items:center; }
-  .pip { width:clamp(14px,3.4vh,32px); height:clamp(14px,3.4vh,32px); border-radius:50%;
+    border-radius:12px; color:#fff; font-size:clamp(13px,2.2vh,22px);
+    padding:clamp(4px,.7vh,12px) clamp(11px,2.2vw,24px); cursor:pointer; font-weight:800; }
+  #hud .units { position:absolute; bottom:clamp(6px,1.6vh,16px); left:clamp(8px,2.5vw,24px);
+    display:flex; gap:clamp(4px,1vw,12px); align-items:center; }
+  .pip { width:clamp(18px,3.6vh,34px); height:clamp(18px,3.6vh,34px); border-radius:50%;
     border:2px solid rgba(0,0,0,.45); }
   .pip.red { background:#e8453c; } .pip.yellow { background:#f5c542; }
   .pip.blue { background:#4aa8e8; } .pip.black { background:#3a3a44; }
 
   .ov { position:fixed; inset:0; z-index:20; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; padding:3vw; background:rgba(6,10,20,.85); }
-  .panel { display:flex; flex-direction:column; align-items:center; gap:1.4vh;
-    width:min(92vw,620px); max-height:94vh; overflow-y:auto;
-    padding:2.6vh min(6vw,40px); border-radius:22px;
+    align-items:center; justify-content:center; padding:clamp(10px,3vh,30px);
+    background:rgba(6,10,20,.85); }
+  .panel { display:flex; flex-direction:column; align-items:center;
+    gap:clamp(9px,1.6vh,20px); padding:clamp(14px,3.4vh,34px) clamp(14px,5vw,44px);
+    border-radius:22px; width:min(92vw,560px); max-width:min(92vw,560px);
     background:linear-gradient(180deg,#22304a,#141d2e); border:3px solid #ffcf5c;
     box-shadow:0 14px 40px rgba(0,0,0,.6); }
-  .panel h2 { font-size:clamp(18px,4vh,44px); font-weight:900; color:#ffd34d;
+  .panel h2 { font-size:clamp(18px,4vh,40px); font-weight:900; color:#ffd34d;
     text-shadow:0 3px 0 #a3341f; text-align:center; }
-  .stars { font-size:clamp(28px,6vh,64px); letter-spacing:1vw; color:#ffd34d; line-height:1.1; }
+  .stars { font-size:clamp(26px,6vh,58px); letter-spacing:.16em; color:#ffd34d;
+    text-align:center; line-height:1.1; }
   .stars .off { color:#42506b; }
-  .hline { display:flex; flex-wrap:wrap; justify-content:center; gap:2vw;
-    font-size:clamp(12px,2.1vh,23px); font-weight:800; }
+  .hline { display:flex; gap:clamp(8px,3vw,26px); font-size:clamp(12px,2.2vh,22px);
+    font-weight:800; flex-wrap:wrap; justify-content:center; text-align:center; }
   .hline span { color:#ffd34d; }
-  .row { display:flex; flex-wrap:wrap; justify-content:center; gap:2vw; width:100%; }
-  .row .btn { flex:0 1 auto; min-width:min(34vw,150px); }
+  .panel .acts { display:flex; gap:clamp(6px,2vw,16px); flex-wrap:wrap;
+    justify-content:center; width:100%; }
+  .panel .acts .btn { flex:1 1 auto; min-width:min(28vw,140px); }
 </style>
 </head>
 <body>
 
 <canvas id="cv"></canvas>
 
-<div id="hud" style="display:none">
+<div id="hud" class="hidden">
   <div class="bar">
     <div class="chip" id="hudLevel">Уровень 1</div>
     <div class="chip" id="hudScore">0</div>
@@ -136,7 +153,7 @@
     <button class="btn ghost small" id="btnLevelsBack">← Меню</button>
     <div class="coinbox">🪙 <span id="levelsCoins">0</span></div>
   </div>
-  <div class="subtitle" style="margin-top:1vh">Выбор уровня</div>
+  <div class="subtitle" style="margin-top:14px">Выбор уровня</div>
   <div class="grid" id="levelsGrid"></div>
 </section>
 
@@ -165,7 +182,7 @@
     <div class="sw" id="swMusic"><span>🎵 Музыка</span><span class="dot"><i></i></span></div>
     <div class="sw" id="swVibe"><span>📳 Вибрация</span><span class="dot"><i></i></span></div>
   </div>
-  <div class="coinbox" id="setInfo" style="font-size:clamp(10px,1.5vh,17px);font-weight:600;color:#93a7c4;max-width:80vw;white-space:normal;text-align:center">Angry Birds 1.2</div>
+  <div class="coinbox" id="setInfo" style="font-size:clamp(10px,1.6vh,16px);font-weight:600;color:#93a7c4;max-width:min(80vw,520px);text-align:center">Angry Birds 1.0</div>
   <button class="btn ghost" id="btnReset">Сбросить прогресс</button>
   <button class="btn" id="btnSettingsBack">Назад</button>
 </section>
@@ -173,18 +190,20 @@
 <div id="ovPause" class="ov" style="display:none">
   <div class="panel">
     <h2>Пауза</h2>
-    <button class="btn" id="btnResume">Продолжить</button>
-    <button class="btn alt" id="btnRestart">Заново</button>
-    <button class="btn ghost" id="btnQuitP">В меню</button>
+    <div class="acts">
+      <button class="btn" id="btnResume">Продолжить</button>
+      <button class="btn alt" id="btnRestart">Заново</button>
+      <button class="btn ghost" id="btnQuitP">В меню</button>
+    </div>
   </div>
 </div>
 
 <div id="ovWin" class="ov" style="display:none">
   <div class="panel">
     <h2>Уровень пройден!</h2>
-    <div class="stars" id="winStars">☆☆☆</div>
+    <div class="stars" id="winStars">★★★</div>
     <div class="hline">Очки: <span id="winScore">0</span> · Монеты: <span id="winCoins">0</span></div>
-    <div class="row">
+    <div class="acts">
       <button class="btn" id="btnNext">Далее</button>
       <button class="btn alt" id="btnReplay">Заново</button>
       <button class="btn ghost" id="btnQuitW">Меню</button>
@@ -196,7 +215,7 @@
   <div class="panel">
     <h2>Птицы закончились</h2>
     <div class="hline">Осталось свиней: <span id="losePigs">0</span></div>
-    <div class="row">
+    <div class="acts">
       <button class="btn" id="btnRetry">Заново</button>
       <button class="btn ghost" id="btnQuitL">Меню</button>
     </div>
