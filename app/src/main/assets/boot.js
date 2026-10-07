@@ -18,7 +18,7 @@ if (!G || !R || !U || !C) {
   return;
 }
 
-var last = 0, started = false;
+var last = 0, started = false, hudTick = 0;
 
 function frame(ts) {
   if (!last) last = ts;
@@ -73,8 +73,13 @@ function frame(ts) {
     if (res === 'win') C.onWin();
     else if (res === 'lose') C.onLose();
 
-    U.syncScore();
-    U.syncHud();
+    /* HUD обновляем не каждый кадр, а 8 раз в секунду */
+    hudTick += dt;
+    if (hudTick > 0.12) {
+      hudTick = 0;
+      U.syncScore();
+      U.syncHud();
+    }
   }
 
   R.tick(dt);
