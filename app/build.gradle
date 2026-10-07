@@ -10,8 +10,10 @@ android {
         applicationId "com.cim.angrybirds"
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        // ИСПРАВЛЕНИЕ: versionCode не менялся, поэтому Android
+        // мог считать новую сборку той же версией и не обновлять её.
+        versionCode 3
+        versionName "1.3"
     }
 
     buildTypes {
