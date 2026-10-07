@@ -1,49 +1,47 @@
 /* ============================================================
-   ANGRY BIRDS — данные, прогресс, магазин, достижения, звук
+   ANGRY BIRDS — ядро: мир, материалы, сохранение, звук, уровни
    Экспорт: window.ABG
    ============================================================ */
 window.ABG = (function () {
 'use strict';
 var G = {};
 
-/* ---------- мир ---------- */
-G.WORLD_W = 2200;
+/* ---------- размеры мира ---------- */
+G.WORLD_W = 2400;
 G.WORLD_H = 720;
-G.GROUND_Y = 620;
-G.SLING_X = 205;
-G.SLING_Y = 466;
-G.MAX_PULL = 118;
-G.POWER = 8.0;
-G.GRAVITY = 1500;
+G.GROUND_Y = 622;
+G.SLING_X = 220;
+G.SLING_Y = 468;
+G.MAX_PULL = 130;
+G.POWER = 8.2;
+G.GRAVITY = 1600;
 G.TOTAL_LEVELS = 50;
+G.MAX_STARS = G.TOTAL_LEVELS * 3;
 
 /* ---------- материалы ---------- */
 G.MAT = {
-  wood:  { hp: 60,  fill: '#c98b3d', edge: '#8a5a22', dens: 1.00 },
-  ice:   { hp: 34,  fill: '#a8e0f5', edge: '#6fb6d6', dens: 0.65 },
-  stone: { hp: 120, fill: '#b9b9b9', edge: '#7d7d7d', dens: 1.70 },
-  sand:  { hp: 80,  fill: '#e3cf8f', edge: '#b5a05f', dens: 1.20 }
+  wood:  { hp: 80,  fill: '#c98b3d', edge: '#8a5a22', dens: 1.0, dust: '#a9742e' },
+  ice:   { hp: 45,  fill: '#a8e0f5', edge: '#6fb6d6', dens: 0.7, dust: '#cdeefb' },
+  stone: { hp: 150, fill: '#bcbcbc', edge: '#7d7d7d', dens: 1.7, dust: '#9a9a9a' },
+  sand:  { hp: 100, fill: '#e3cf8f', edge: '#b5a05f', dens: 1.2, dust: '#cbb877' }
 };
 
 /* ---------- птицы ---------- */
 G.BIRDS = {
-  red:    { r: 22, mass: 1.00, ability: 'none'  },
-  yellow: { r: 20, mass: 0.85, ability: 'boost' },
-  blue:   { r: 17, mass: 0.70, ability: 'split' },
-  black:  { r: 25, mass: 1.35, ability: 'bomb'  }
+  red:    { r: 22, mass: 1.00, ability: 'none',  fill: '#e8453c', belly: '#ffd9d6' },
+  yellow: { r: 20, mass: 0.85, ability: 'boost', fill: '#f5c542', belly: '#fff0b8' },
+  blue:   { r: 17, mass: 0.70, ability: 'split', fill: '#4aa8e8', belly: '#d6efff' },
+  black:  { r: 25, mass: 1.35, ability: 'bomb',  fill: '#3a3a44', belly: '#6a6a76' }
 };
 G.BIRD = G.BIRDS;
 
-/* ---------- состояние ---------- */
-G.state = 'menu';
+/* ---------- изменяемое состояние ---------- */
+G.state = 'menu';          // menu | play | pause | win | lose
 G.level = 1;
 G.score = 0;
-G.started = false;
 G.ended = false;
 G.winT = 0;
 G.loseT = 0;
-G.shots = 0;
-G.kills = 0;
 G.lastWin = null;
 G.blocks = [];
 G.pigs = [];
@@ -55,168 +53,264 @@ G.active = null;
 G.flying = null;
 
 /* ---------- сохранение ---------- */
-var KEY = 'ab_save_v3';
-function def() {
-  return {
-    stars: {}, coins: 0, unlocked: 1,
-    sound: true, music: true, vibe: true,
-    items: {},
-    stats: { shots: 0, kills: 0, blocks: 0, wins: 0, bombs: 0, splits: 0, boosts: 0, noloss: 0, buy: 0, maxCoins: 0 },
-    ach: {}
-  };
-}
-G.save = def();
-try {
-  var raw = localStorage.getItem(KEY);
-  if (raw) {
-    var o = JSON.parse(raw), d = def(), k;
-    for (k in d) if (!(k in o)) o[k] = d[k];
-    for (k in d.stats) if (!(k in (o.stats || {}))) (o.stats = o.stats || {})[k] = 0;
-    G.save = o;
-  }
-} catch (e) { G.save = def(); }
+var KEY = 'ab_save_v2';
+G.save = { coins: 0, stars: {}, unlocked: 1, sound: true, music: true, vibe: true, items: {}, ach: {} };
 
-G.store = function () { try { localStorage.setItem(KEY, JSON.stringify(G.save)); } catch (e) {} };
-G.has = function (id) { return !!(G.save.items && G.save.items[id]); };
-G.resetProgress = function () { G.save = def(); G.store(); };
-G.vibrate = function (ms) { if (G.save.vibe && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } };
+G.load = function () {
+  try {
+    var s = localStorage.getItem(KEY);
+    if (s) {
+      var o = JSON.parse(s);
+      if (o && typeof o === 'object') {
+        for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) G.save[k] = o[k];
+      }
+    }
+  } catch (e) { /* первый запуск */ }
+  if (!G.save.stars) G.save.stars = {};
+  if (!G.save.items) G.save.items = {};
+  if (!G.save.ach) G.save.ach = {};
+  if (!G.save.unlocked || G.save.unlocked < 1) G.save.unlocked = 1;
+};
 
-G.stars = function (n) { return G.save.stars[n] || 0; };
-G.setStars = function (n, v) {
-  if ((G.save.stars[n] || 0) < v) G.save.stars[n] = v;
-  if ((G.save.unlocked || 1) < n + 1) G.save.unlocked = Math.min(G.TOTAL_LEVELS, n + 1);
+G.store = function () {
+  try { localStorage.setItem(KEY, JSON.stringify(G.save)); } catch (e) { /* приватный режим */ }
+};
+
+G.resetProgress = function () {
+  G.save.coins = 0; G.save.stars = {}; G.save.unlocked = 1; G.save.items = {}; G.save.ach = {};
   G.store();
 };
-G.totalStars = function () {
-  var s = 0, i;
-  for (i = 1; i <= G.TOTAL_LEVELS; i++) s += (G.save.stars[i] || 0);
-  return s;
+
+/* ---------- сводка прогресса ---------- */
+G.starsOf = function (n) { return G.save.stars[n] || 0; };
+G.starsTotal = function () {
+  var t = 0;
+  for (var k in G.save.stars) if (G.save.stars[k] > t) t += 0; // суммируем отдельно
+  t = 0;
+  for (var i = 1; i <= G.TOTAL_LEVELS; i++) t += G.starsOf(i);
+  return t;
 };
-G.doneLevels = function () {
-  var c = 0, i;
-  for (i = 1; i <= G.TOTAL_LEVELS; i++) if (G.save.stars[i]) c++;
+G.levelsDone = function () {
+  var c = 0;
+  for (var i = 1; i <= G.TOTAL_LEVELS; i++) if (G.starsOf(i) > 0) c++;
   return c;
 };
 G.maxUnlocked = function () { return Math.max(1, Math.min(G.TOTAL_LEVELS, G.save.unlocked || 1)); };
-G.pigPips = function (n) { return Math.max(1, 1 + Math.floor(n / 6)); };
+G.has = function (id) { return !!G.save.items[id]; };
+G.achCount = function () {
+  var c = 0;
+  for (var i = 0; i < G.ACH.length; i++) if (G.save.ach[G.ACH[i].id]) c++;
+  return c;
+};
 
 /* ---------- магазин ---------- */
 G.ITEMS = [
-  { id: 'gloves', name: 'Перчатки',      desc: 'Сила выстрела +18%',      price: 120, ico: '🧤' },
-  { id: 'feather', name: 'Лёгкое перо',  desc: 'Птица летит дальше',      price: 150, ico: '🪶' },
-  { id: 'extra',  name: 'Запасная птица', desc: '+1 птица на уровень',     price: 220, ico: '🛡️' },
-  { id: 'smooth', name: 'Плавная камера', desc: 'Камера следит мягче',     price: 90,  ico: '🌀' },
-  { id: 'gold',   name: 'Золотая птица',  desc: '+25% монет за уровень',   price: 300, ico: '🪙' },
-  { id: 'bomb',   name: 'Чёрная птица',   desc: 'Бомба в каждом наборе',   price: 400, ico: '💣' }
+  { id: 'gloves',  name: 'Крепкая рогатка', desc: '+18% к силе натяжения', cost: 120, icon: '🎯' },
+  { id: 'extra',   name: 'Запасная птица',  desc: '+1 птица на уровне',    cost: 200, icon: '🐦' },
+  { id: 'hat',     name: 'Шляпа',           desc: 'Просто красиво',        cost: 300, icon: '🎩' },
+  { id: 'gold',    name: 'Золотые перья',   desc: '+25% монет за уровень', cost: 450, icon: '✨' }
 ];
 
 G.buy = function (id) {
   var it = null, i;
   for (i = 0; i < G.ITEMS.length; i++) if (G.ITEMS[i].id === id) it = G.ITEMS[i];
-  if (!it || G.has(id)) return false;
-  if ((G.save.coins || 0) < it.price) return false;
-  G.save.coins -= it.price;
+  if (!it || G.has(id) || G.save.coins < it.cost) return false;
+  G.save.coins -= it.cost;
   G.save.items[id] = true;
-  G.save.stats.buy = (G.save.stats.buy || 0) + 1;
   G.store();
-  G.checkAch();
   return true;
 };
 
 /* ---------- достижения ---------- */
 G.ACH = [
-  { id: 'a1',  ico: '🎯', name: 'Первый выстрел',  desc: 'Выстрелить один раз',        f: function (s) { return s.shots >= 1; } },
-  { id: 'a2',  ico: '🏹', name: 'Меткий глаз',     desc: '50 выстрелов',               f: function (s) { return s.shots >= 50; } },
-  { id: 'a3',  ico: '🧱', name: 'Разрушитель',     desc: 'Разбить 100 блоков',         f: function (s) { return s.blocks >= 100; } },
-  { id: 'a4',  ico: '🐷', name: 'Первый свин',     desc: 'Лопнуть первого свина',      f: function (s) { return s.kills >= 1; } },
-  { id: 'a5',  ico: '⚡', name: 'Гроза свиней',    desc: '100 свиней',                 f: function (s) { return s.kills >= 100; } },
-  { id: 'a6',  ico: '🏆', name: 'Первый уровень',  desc: 'Пройти уровень',             f: function (s) { return s.wins >= 1; } },
-  { id: 'a7',  ico: '🎖️', name: 'Ветеран',         desc: '10 уровней',                 f: function (s) { return s.wins >= 10; } },
-  { id: 'a8',  ico: '👑', name: 'Мастер',          desc: '25 уровней',                 f: function (s) { return s.wins >= 25; } },
-  { id: 'a9',  ico: '🌟', name: 'Все уровни',      desc: 'Пройти все 50 уровней',      f: function (s) { return s.wins >= 50; } },
-  { id: 'a10', ico: '⭐', name: '10 звёзд',        desc: 'Собрать 10 звёзд',           f: function () { return G.totalStars() >= 10; } },
-  { id: 'a11', ico: '✨', name: '50 звёзд',        desc: 'Собрать 50 звёзд',           f: function () { return G.totalStars() >= 50; } },
-  { id: 'a12', ico: '💫', name: '100 звёзд',       desc: 'Собрать 100 звёзд',          f: function () { return G.totalStars() >= 100; } },
-  { id: 'a13', ico: '💰', name: 'Богач',           desc: 'Накопить 500 монет',         f: function () { return (G.save.coins || 0) >= 500; } },
-  { id: 'a14', ico: '💎', name: 'Миллионер',       desc: 'Накопить 2000 монет',        f: function (s) { return (s.maxCoins || 0) >= 2000; } },
-  { id: 'a15', ico: '🛒', name: 'Покупатель',      desc: 'Купить 3 предмета',          f: function (s) { return s.buy >= 3; } },
-  { id: 'a16', ico: '📦', name: 'Коллекционер',    desc: 'Купить всё в магазине',      f: function (s) { return s.buy >= 6; } },
-  { id: 'a17', ico: '🕊️', name: 'Без потерь',     desc: 'Пройти уровень всеми птицами', f: function (s) { return s.noloss >= 1; } },
-  { id: 'a18', ico: '💣', name: 'Взрывник',        desc: '20 взрывов',                 f: function (s) { return s.bombs >= 20; } },
-  { id: 'a19', ico: '🔷', name: 'Тройной удар',    desc: '20 раз разделить синюю',     f: function (s) { return s.splits >= 20; } },
-  { id: 'a20', ico: '💛', name: 'Рывок',           desc: '20 раз ускорить жёлтую',     f: function (s) { return s.boosts >= 20; } }
+  { id: 'first',   name: 'Первый выстрел',   desc: 'Пройди 1 уровень',        icon: '🥇' },
+  { id: 'l10',     name: 'Десятка',          desc: 'Пройди 10 уровней',       icon: '🔟' },
+  { id: 'l25',     name: 'Полпути',          desc: 'Пройди 25 уровней',       icon: '🏃' },
+  { id: 'l50',     name: 'Легенда',          desc: 'Пройди все 50 уровней',   icon: '👑' },
+  { id: 's30',     name: 'Копилка звёзд',    desc: 'Собери 30 звёзд',         icon: '⭐' },
+  { id: 's75',     name: 'Половина неба',    desc: 'Собери 75 звёзд',         icon: '🌟' },
+  { id: 's150',    name: 'Идеально',         desc: 'Собери все 150 звёзд',    icon: '💫' },
+  { id: 'three',   name: 'Чисто',            desc: 'Три звезды на любом уровне', icon: '✨' },
+  { id: 'nobird',  name: 'Экономный',        desc: 'Пройди уровень с 1 птицей',  icon: '🎯' },
+  { id: 'coins',   name: 'Богач',            desc: 'Накопи 1000 монет',       icon: '💰' },
+  { id: 'shop1',   name: 'Покупатель',       desc: 'Купи первую вещь',        icon: '🛒' },
+  { id: 'shop4',   name: 'Коллекционер',     desc: 'Скупи весь магазин',      icon: '🏪' },
+  { id: 'ice',     name: 'Ледокол',          desc: 'Разбей 20 ледяных блоков', icon: '🧊' },
+  { id: 'wood',    name: 'Дровосек',         desc: 'Разбей 20 деревянных',    icon: '🪵' },
+  { id: 'stone',   name: 'Камнелом',         desc: 'Разбей 20 каменных',      icon: '🪨' },
+  { id: 'pigs50',  name: 'Охотник',          desc: 'Убери 50 свиней',         icon: '🐷' },
+  { id: 'pigs200', name: 'Гроза свиней',     desc: 'Убери 200 свиней',        icon: '🐗' },
+  { id: 'yellow',  name: 'Ускоритель',       desc: 'Используй жёлтую птицу',  icon: '⚡' },
+  { id: 'blue',    name: 'Тройной удар',     desc: 'Используй синюю птицу',   icon: '🔷' },
+  { id: 'black',   name: 'Бум',              desc: 'Взорви чёрную птицу',     icon: '💥' }
 ];
 
-G.checkAch = function () {
-  var s = G.save.stats, i, a, unlocked = false;
-  if ((G.save.coins || 0) > (s.maxCoins || 0)) { s.maxCoins = G.save.coins; }
-  for (i = 0; i < G.ACH.length; i++) {
-    a = G.ACH[i];
-    if (!G.save.ach[a.id]) {
-      var ok = false;
-      try { ok = !!a.f(s); } catch (e) { ok = false; }
-      if (ok) { G.save.ach[a.id] = 1; unlocked = true; }
-    }
-  }
-  if (unlocked) G.store();
-  return unlocked;
+G.unlockAch = function (id, silent) {
+  if (G.save.ach[id]) return false;
+  G.save.ach[id] = true;
+  G.save.coins += 50;
+  G.store();
+  G.pops.push({ x: G.SLING_X + 120, y: 140, t: 1.6, txt: '🏆 +50' });
+  return true;
 };
-G.achCount = function () {
-  var c = 0, i;
-  for (i = 0; i < G.ACH.length; i++) if (G.save.ach[G.ACH[i].id]) c++;
-  return c;
+
+/* ---------- достижения: счётчики ---------- */
+G.stat = G.save.stat || (G.save.stat = { ice: 0, wood: 0, stone: 0, pigs: 0 });
+G.bump = function (k, v) {
+  G.stat[k] = (G.stat[k] || 0) + (v || 1);
+  if (k === 'pigs' && G.stat.pigs >= 50) G.unlockAch('pigs50');
+  if (k === 'pigs' && G.stat.pigs >= 200) G.unlockAch('pigs200');
+  if (k === 'ice' && G.stat.ice >= 20) G.unlockAch('ice');
+  if (k === 'wood' && G.stat.wood >= 20) G.unlockAch('wood');
+  if (k === 'stone' && G.stat.stone >= 20) G.unlockAch('stone');
+  G.store();
 };
 
 /* ---------- звук (WebAudio, без файлов) ---------- */
-var actx = null;
-G.ac = function () {
-  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } }
-  if (actx && actx.state === 'suspended') { try { actx.resume(); } catch (e) {} }
-  return actx;
-};
-function tone(freq, dur, type, vol) {
-  var a = G.ac();
-  if (!a || !G.save.sound) return;
+var AC = null, master = null, musicTimer = null;
+
+function ac() {
+  if (AC) return AC;
   try {
-    var o = a.createOscillator(), g = a.createGain();
-    o.type = type || 'square';
-    o.frequency.value = freq;
-    g.gain.value = 0.0001;
-    o.connect(g); g.connect(a.destination);
-    var t = a.currentTime;
-    g.gain.exponentialRampToValueAtTime(vol || 0.07, t + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.start(t); o.stop(t + dur + 0.02);
-  } catch (e) {}
+    var C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    AC = new C();
+    master = AC.createGain();
+    master.gain.value = 0.25;
+    master.connect(AC.destination);
+  } catch (e) { AC = null; }
+  return AC;
 }
+
+function tone(freq, dur, type, vol, slide) {
+  if (!G.save.sound) return;
+  var ctx = ac();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  var o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type || 'sine';
+  o.frequency.value = freq;
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, slide), ctx.currentTime + dur);
+  g.gain.value = 0.001;
+  g.gain.exponentialRampToValueAtTime(vol || 0.3, ctx.currentTime + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+  o.connect(g); g.connect(master);
+  o.start(); o.stop(ctx.currentTime + dur + 0.02);
+}
+
+G.ac = ac;
 G.SFX = {
-  click: function () { tone(660, 0.06, 'square', 0.05); },
-  pull:  function () { tone(180, 0.10, 'sawtooth', 0.05); },
-  shoot: function () { tone(320, 0.12, 'triangle', 0.08); },
-  thud:  function () { G.vibrate(12); tone(110, 0.10, 'sine', 0.08); },
-  hit:   function () { tone(240, 0.07, 'square', 0.06); G.vibrate(18); },
-  brk:   function () { G.vibrate(22); tone(150, 0.13, 'sawtooth', 0.07); },
-  pig:   function () { tone(520, 0.13, 'triangle', 0.08); G.vibrate(16); },
-  bomb:  function () { G.vibrate(60); tone(70, 0.32, 'sawtooth', 0.12); },
-  win:   function () { tone(660, 0.13, 'triangle', 0.09); setTimeout(function () { tone(880, 0.16, 'triangle', 0.09); }, 130); setTimeout(function () { tone(1180, 0.22, 'triangle', 0.09); }, 280); },
-  lose:  function () { tone(300, 0.22, 'sine', 0.08); setTimeout(function () { tone(200, 0.32, 'sine', 0.08); }, 220); },
-  coin:  function () { tone(980, 0.08, 'square', 0.06); setTimeout(function () { tone(1320, 0.10, 'square', 0.06); }, 80); }
+  click: function () { tone(520, 0.07, 'square', 0.16); },
+  pull:  function () { tone(180, 0.12, 'sawtooth', 0.10, 90); },
+  shoot: function () { tone(700, 0.16, 'triangle', 0.22, 180); },
+  hit:   function () { tone(140, 0.10, 'square', 0.20, 70); },
+  crack: function () { tone(240, 0.14, 'sawtooth', 0.18, 90); },
+  boom:  function () { tone(90, 0.42, 'sawtooth', 0.32, 35); },
+  pig:   function () { tone(880, 0.10, 'square', 0.20, 320); },
+  win:   function () { tone(660, 0.14, 'triangle', 0.24); setTimeout(function () { tone(880, 0.18, 'triangle', 0.24); }, 130); setTimeout(function () { tone(1180, 0.26, 'triangle', 0.24); }, 280); },
+  lose:  function () { tone(320, 0.22, 'sine', 0.22, 120); setTimeout(function () { tone(180, 0.34, 'sine', 0.22, 70); }, 190); }
 };
 
-/* ---------- музыка (простая петля) ---------- */
-var mTimer = null, mStep = 0;
-var MELODY = [262, 330, 392, 330, 294, 349, 440, 349, 262, 330, 392, 523, 466, 392, 330, 294];
+/* ---------- музыка: простая петля ---------- */
 G.musicStart = function () {
-  if (!G.save.music || mTimer) return;
-  G.ac();
-  mTimer = setInterval(function () {
+  if (!G.save.music || musicTimer) return;
+  var ctx = ac();
+  if (!ctx) return;
+  var notes = [392, 466, 523, 466, 392, 349, 392, 523];
+  var i = 0;
+  var tick = function () {
     if (!G.save.music) { G.musicStop(); return; }
-    if (G.state === 'play' || G.state === 'pause') { mStep++; return; }
-    tone(MELODY[mStep % MELODY.length], 0.32, 'sine', 0.035);
-    mStep++;
-  }, 430);
+    tone(notes[i % notes.length], 0.26, 'triangle', 0.055);
+    i++;
+  };
+  musicTimer = setInterval(tick, 340);
+  tick();
 };
-G.musicStop = function () { if (mTimer) { clearInterval(mTimer); mTimer = null; } };
+G.musicStop = function () {
+  if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+};
+
+/* ---------- вибрация ---------- */
+G.vibe = function (ms) {
+  if (!G.save.vibe) return;
+  try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* нет вибро */ }
+};
+
+/* ---------- генератор 50 уровней ---------- */
+function rng(n) {
+  var s = n * 2654435761 % 2147483647;
+  if (s <= 0) s += 2147483646;
+  return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+}
+
+function birdSet(n) {
+  if (n <= 3) return ['red', 'red'];
+  if (n <= 8) return ['red', 'red', 'yellow'];
+  if (n <= 14) return ['red', 'yellow', 'blue'];
+  if (n <= 20) return ['yellow', 'blue', 'red', 'red'];
+  if (n <= 30) return ['red', 'yellow', 'blue', 'red', 'yellow'];
+  if (n <= 40) return ['red', 'yellow', 'blue', 'black', 'red'];
+  return ['black', 'yellow', 'blue', 'red', 'yellow', 'red'];
+}
+
+G.LEVELS = (function () {
+  var out = [], n, r, mats = ['wood', 'wood', 'ice', 'stone', 'sand'];
+  for (n = 1; n <= G.TOTAL_LEVELS; n++) {
+    r = rng(n + 7);
+    var blocks = [], pigs = [];
+    var towers = 2 + Math.floor((n - 1) / 8);
+    if (towers > 5) towers = 5;
+    var hardness = Math.min(3, Math.floor((n - 1) / 17));
+    for (var t = 0; t < towers; t++) {
+      var bx = 1180 + t * (128 + Math.floor(r() * 46));
+      var h = 2 + Math.floor(r() * 4);
+      for (var i = 0; i < h; i++) {
+        var left = { x: bx, y: G.GROUND_Y - 44 * (i + 1), w: 44, h: 44, mat: mats[Math.floor(r() * mats.length)] };
+        var right = { x: bx + 76, y: G.GROUND_Y - 44 * (i + 1), w: 44, h: 44, mat: mats[Math.floor(r() * mats.length)] };
+        if (n > 12 && i === h - 1) { left.mat = 'stone'; right.mat = 'stone'; }
+        blocks.push(left, right);
+      }
+      var top = { x: bx - 6, y: G.GROUND_Y - 44 * h - 26, w: 132, h: 26, mat: mats[Math.floor(r() * (1 + hardness))] };
+      blocks.push(top);
+      if (r() < 0.85) pigs.push({ x: bx + 60, y: G.GROUND_Y - 22, r: 19 + Math.round(r() * 7) });
+      if (r() < 0.45) pigs.push({ x: bx + 60, y: G.GROUND_Y - 44 * h - 24, r: 17 + Math.round(r() * 6) });
+    }
+    if (n <= 2) { pigs.push({ x: 1310, y: G.GROUND_Y - 24, r: 22 }); }
+    out.push({ n: n, blocks: blocks, pigs: pigs, birds: birdSet(n) });
+  }
+  return out;
+})();
+
+/* ---------- старт уровня ---------- */
+G.startLevel = function (n) {
+  n = Math.max(1, Math.min(G.TOTAL_LEVELS, n | 0));
+  var L = G.LEVELS[n - 1];
+
+  G.level = n;
+  G.score = 0;
+  G.state = 'play';
+  G.ended = false;
+  G.winT = 0;
+  G.loseT = 0;
+  G.lastWin = null;
+  G.blocks = [];
+  G.pigs = [];
+  G.parts = [];
+  G.pops = [];
+  G.extraFlyers = [];
+  G.flying = null;
+
+  var i;
+  for (i = 0; i < L.blocks.length; i++) G.blocks.push(G.makeBlock(L.blocks[i]));
+  for (i = 0; i < L.pigs.length; i++) G.pigs.push(G.makePig(L.pigs[i]));
+
+  if (!G.pigs.length) G.pigs.push(G.makePig({ x: 1300, y: G.GROUND_Y - 24, r: 22 }));
+
+  G.birdsLeft = L.birds.slice();
+  if (G.has('extra')) G.birdsLeft.push('red');
+
+  G.nextBird();
+};
 
 return G;
 })();
