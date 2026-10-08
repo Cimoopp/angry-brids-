@@ -15,109 +15,91 @@
 
   #cv { position:fixed; inset:0; z-index:1; display:block; touch-action:none; }
 
-  .screen { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:clamp(8px, 1.6vh, 20px);
-    padding:clamp(10px, 2.5vh, 28px) clamp(10px, 3vw, 30px); overflow:hidden;
+  .screen { position:fixed; inset:0; z-index:10; display:none; flex-direction:column;
+    align-items:center; justify-content:center; gap:1.6vh; padding:2.5vh 3vw;
     background:linear-gradient(180deg,#0b1224 0%,#16233d 55%,#0b1224 100%); }
 
-  .title { font-size:clamp(26px, 6vh, 60px); font-weight:900; letter-spacing:.06em; line-height:1;
-    color:#ffd34d; text-shadow:0 4px 0 #a3341f, 0 8px 16px rgba(0,0,0,.6); text-align:center; }
-  .subtitle { font-size:clamp(11px, 1.9vh, 18px); letter-spacing:.3em; color:#8fa6c7;
-    text-transform:uppercase; text-align:center; }
+  .title { font-size:clamp(30px, 6vh, 62px); font-weight:900; letter-spacing:.06em; line-height:1;
+    color:#ffd34d; text-shadow:0 4px 0 #a3341f, 0 8px 16px rgba(0,0,0,.6); }
+  .subtitle { font-size:clamp(12px, 1.9vh, 20px); letter-spacing:.30em; color:#8fa6c7; text-transform:uppercase; }
 
-  .btn { min-width:min(32vw, 240px); padding:clamp(9px, 1.5vh, 16px) clamp(14px, 3vw, 30px);
-    border:3px solid #ffcf5c; border-radius:14px;
-    background:linear-gradient(180deg,#ff6a4d,#c62828); color:#fff;
-    font-size:clamp(13px, 2.1vh, 20px); font-weight:800; letter-spacing:.06em;
-    text-transform:uppercase; box-shadow:0 6px 0 #7a1414; cursor:pointer; }
+  .btn { min-width:clamp(150px, 32vw, 320px); padding:1.4vh 3vw; border:3px solid #ffcf5c;
+    border-radius:14px; background:linear-gradient(180deg,#ff6a4d,#c62828); color:#fff;
+    font-size:clamp(15px, 2.1vh, 24px); font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+    box-shadow:0 6px 0 #7a1414; cursor:pointer; }
   .btn:active { transform:translateY(3px); box-shadow:0 3px 0 #7a1414; }
   .btn.alt { background:linear-gradient(180deg,#4d7dff,#22409c); border-color:#8fb4ff; box-shadow:0 6px 0 #16296b; }
   .btn.ghost { background:linear-gradient(180deg,#2b3a55,#1a2436); border-color:#4d6b96; box-shadow:0 6px 0 #0e1725; }
-  .btn.small { min-width:0; padding:clamp(7px, 1.1vh, 12px) clamp(10px, 2.2vw, 20px);
-    font-size:clamp(11px, 1.7vh, 16px); }
+  .btn.small { min-width:0; padding:1vh 2.4vw; font-size:clamp(12px, 1.7vh, 18px); }
 
-  .topbar { position:absolute; top:clamp(8px, 2vh, 20px); left:clamp(8px, 3vw, 24px); right:clamp(8px, 3vw, 24px);
-    display:flex; align-items:center; justify-content:space-between; gap:10px; }
-  .coinbox { display:flex; align-items:center; gap:6px; font-size:clamp(12px, 1.9vh, 18px);
-    font-weight:800; color:#ffd34d; background:rgba(9,15,28,.75);
-    border:2px solid #3a4d6b; border-radius:999px; padding:clamp(5px, .8vh, 10px) clamp(10px, 1.8vw, 20px); }
+  .topbar { position:absolute; top:2vh; left:3vw; right:3vw; display:flex; align-items:center;
+    justify-content:space-between; }
+  .coinbox { display:flex; align-items:center; gap:.6vw; font-size:clamp(13px, 2vh, 22px);
+    font-weight:800; color:#ffd34d; background:rgba(9,15,28,.75); border:2px solid #3a4d6b;
+    border-radius:999px; padding:.7vh 1.8vw; }
 
-  .grid { display:grid; grid-template-columns:repeat(10, 1fr);
-    gap:clamp(4px, 1vh, 12px) clamp(4px, .9vw, 12px); width:100%; max-width:min(94vw, 780px);
-    max-height:70vh; overflow-y:auto; padding:2px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(7vh, 1fr)); gap:1vh .9vw;
+    width:100%; max-width:96vw; overflow-y:auto; max-height:70vh; }
   .lvl { position:relative; aspect-ratio:1/1; border-radius:12px; border:2px solid #4d6b96;
     background:linear-gradient(180deg,#2e3f5c,#1b2637); display:flex; flex-direction:column;
-    align-items:center; justify-content:center; font-weight:900;
-    font-size:clamp(11px, 2vh, 20px); cursor:pointer; }
+    align-items:center; justify-content:center; font-weight:900; font-size:clamp(13px, 2vh, 22px);
+    cursor:pointer; }
   .lvl.open { border-color:#ffcf5c; background:linear-gradient(180deg,#ff7a4d,#c62828); box-shadow:0 4px 0 #7a1414; }
   .lvl.locked { opacity:.55; }
-  .lvl .st { font-size:clamp(7px, 1.2vh, 12px); letter-spacing:.06em; color:#ffd34d;
-    margin-top:2px; height:1.4vh; white-space:nowrap; }
-  .lvl.locked .st { color:#7d8ba3; }
+  .lvl .st { font-size:clamp(9px, 1.3vh, 14px); letter-spacing:.08em; color:#ffd34d; margin-top:.3vh; }
 
-  .list { width:100%; max-width:min(92vw, 700px); max-height:64vh; overflow-y:auto;
-    display:flex; flex-direction:column; gap:clamp(6px, 1.1vh, 14px); padding:2px; }
-  .card { display:flex; align-items:center; gap:clamp(8px, 1.6vw, 18px);
-    padding:clamp(8px, 1.3vh, 16px) clamp(10px, 2vw, 20px); border-radius:14px;
+  .list { width:100%; max-width:min(92vw, 700px); max-height:64vh; overflow-y:auto; display:flex;
+    flex-direction:column; gap:1.1vh; padding-right:1vw; }
+  .card { display:flex; align-items:center; gap:1.6vw; padding:1.3vh 2vw; border-radius:14px;
     background:linear-gradient(180deg,rgba(46,63,92,.85),rgba(21,32,50,.9)); border:2px solid #3a4d6b; }
-  .card .ico { width:clamp(34px, 6.4vh, 60px); height:clamp(34px, 6.4vh, 60px); flex:0 0 auto;
-    border-radius:12px; background:#0d1524; display:flex; align-items:center; justify-content:center;
-    font-size:clamp(16px, 3.2vh, 30px); }
+  .card .ico { width:6.4vh; height:6.4vh; flex:0 0 auto; border-radius:12px; background:#0d1524;
+    display:flex; align-items:center; justify-content:center; font-size:3vh; }
   .card .txt { flex:1 1 auto; min-width:0; }
-  .card .nm { font-size:clamp(13px, 2vh, 19px); font-weight:800; }
-  .card .ds { font-size:clamp(10px, 1.6vh, 15px); color:#93a7c4; margin-top:2px; }
+  .card .nm { font-size:clamp(14px, 2vh, 22px); font-weight:800; }
+  .card .ds { font-size:clamp(11px, 1.6vh, 17px); color:#93a7c4; margin-top:.3vh; }
   .card.done { border-color:#4bbf73; }
-  .card .lvlpips { font-size:clamp(10px, 1.5vh, 14px); color:#8fa6c7; white-space:nowrap; }
+  .card .lvlpips { font-size:clamp(10px, 1.5vh, 16px); color:#8fa6c7; letter-spacing:.05em; }
 
-  .rows { display:flex; flex-direction:column; gap:clamp(8px, 1.4vh, 16px);
-    width:100%; max-width:min(80vw, 520px); }
-  .sw { display:flex; align-items:center; justify-content:space-between;
-    padding:clamp(8px, 1.4vh, 16px) clamp(10px, 2vw, 20px); border-radius:14px;
-    background:linear-gradient(180deg,rgba(46,63,92,.8),rgba(21,32,50,.9));
-    border:2px solid #3a4d6b; font-size:clamp(12px, 2vh, 18px); font-weight:700; cursor:pointer; }
-  .sw .dot { width:clamp(44px, 7vh, 66px); height:clamp(22px, 3.4vh, 34px); border-radius:999px;
-    background:#2b3a55; border:2px solid #4d6b96; position:relative; flex:0 0 auto; }
-  .sw .dot i { position:absolute; top:.3vh; left:.4vh; width:clamp(14px, 2.5vh, 26px);
-    height:clamp(14px, 2.5vh, 26px); border-radius:50%; background:#8fa6c7; transition:left .15s; }
+  .rows { display:flex; flex-direction:column; gap:1.4vh; width:100%; max-width:min(80vw, 560px); }
+  .sw { display:flex; align-items:center; justify-content:space-between; padding:1.4vh 2vw;
+    border-radius:14px; background:linear-gradient(180deg,rgba(46,63,92,.8),rgba(21,32,50,.9));
+    border:2px solid #3a4d6b; font-size:clamp(14px, 2vh, 22px); font-weight:700; cursor:pointer; }
+  .sw .dot { width:7vh; height:3.4vh; border-radius:999px; background:#2b3a55; border:2px solid #4d6b96;
+    position:relative; flex:0 0 auto; }
+  .sw .dot i { position:absolute; top:.35vh; left:.4vh; width:2.4vh; height:2.4vh; border-radius:50%;
+    background:#8fa6c7; transition:left .15s, background .15s; }
   .sw.on .dot { background:#1f7a45; border-color:#4bbf73; }
-  .sw.on .dot i { left:calc(100% - clamp(14px, 2.5vh, 26px) - .7vh); background:#a8e063; }
+  .sw.on .dot i { left:3.7vh; background:#a8e063; }
 
-  #hud { position:fixed; inset:0; z-index:5; pointer-events:none; }
-  #hud .bar { position:absolute; top:clamp(8px, 1.6vh, 18px); left:clamp(8px, 2.5vw, 22px);
-    right:clamp(8px, 2.5vw, 22px); display:flex; align-items:center; gap:clamp(6px, 1.4vw, 14px); }
-  .chip { background:rgba(9,15,28,.72); border:2px solid #3a4d6b; border-radius:12px;
-    padding:clamp(4px, .8vh, 10px) clamp(8px, 1.6vw, 18px); font-size:clamp(12px, 2vh, 18px);
-    font-weight:800; color:#ffd34d; white-space:nowrap; }
+  #hud { position:fixed; inset:0; z-index:5; pointer-events:none; display:none; }
+  #hud .bar { position:absolute; top:1.6vh; left:2.5vw; right:2.5vw; display:flex; align-items:center; gap:1.4vw; }
+  .chip { background:rgba(9,15,28,.7); border:2px solid #3a4d6b; border-radius:12px;
+    padding:.7vh 1.6vw; font-size:clamp(12px, 1.9vh, 20px); font-weight:800; color:#ffd34d; }
   #hud .spacer { flex:1 1 auto; }
-  #btnPause { pointer-events:auto; background:rgba(9,15,28,.72); border:2px solid #3a4d6b;
-    border-radius:12px; color:#fff; font-size:clamp(14px, 2.2vh, 20px);
-    padding:clamp(3px, .7vh, 9px) clamp(10px, 2.2vw, 22px); cursor:pointer; font-weight:800; }
-  #hud .units { position:absolute; bottom:clamp(8px, 1.6vh, 18px); left:clamp(8px, 2.5vw, 22px);
-    display:flex; gap:clamp(4px, 1vw, 12px); align-items:center; }
-  .pip { width:clamp(20px, 3.6vh, 34px); height:clamp(20px, 3.6vh, 34px); border-radius:50%;
-    border:2px solid rgba(0,0,0,.45); box-shadow:0 2px 6px rgba(0,0,0,.4); }
-  .pip.red { background:linear-gradient(180deg,#ff7a6d,#c62828); }
-  .pip.yellow { background:linear-gradient(180deg,#ffe066,#e0a800); }
-  .pip.blue { background:linear-gradient(180deg,#9fdcff,#2d86c9); }
-  .pip.black { background:linear-gradient(180deg,#6a6a78,#181820); }
+  #btnPause { pointer-events:auto; background:rgba(9,15,28,.7); border:2px solid #3a4d6b;
+    border-radius:12px; color:#fff; font-size:clamp(14px, 2.1vh, 22px); padding:.6vh 2.2vw;
+    cursor:pointer; font-weight:800; }
+  #hud .units { position:absolute; bottom:1.6vh; left:2.5vw; display:flex; gap:1vw; align-items:center; }
+  .pip { width:3.4vh; height:3.4vh; border-radius:50%; border:2px solid rgba(0,0,0,.45); }
+  .pip.red { background:#e8453c; } .pip.yellow { background:#f5c542; }
+  .pip.blue { background:#4aa8e8; } .pip.black { background:#3a3a44; }
 
-  .ov { position:fixed; inset:0; z-index:20; align-items:center; justify-content:center;
-    background:rgba(6,10,20,.82); padding:clamp(10px, 3vh, 30px); }
-  .panel { display:flex; flex-direction:column; align-items:center; gap:clamp(8px, 1.6vh, 18px);
-    width:100%; max-width:min(92vw, 620px); padding:clamp(16px, 3.4vh, 36px) clamp(14px, 5vw, 44px);
-    border-radius:22px; background:linear-gradient(180deg,#22304a,#141d2e);
-    border:3px solid #ffcf5c; box-shadow:0 14px 40px rgba(0,0,0,.6); }
-  .panel h2 { font-size:clamp(20px, 4.2vh, 40px); font-weight:900; color:#ffd34d;
-    text-shadow:0 3px 0 #a3341f; text-align:center; }
-  .stars { font-size:clamp(30px, 6vh, 56px); letter-spacing:clamp(4px, 1vw, 14px);
-    color:#ffd34d; line-height:1; }
+  .ov { position:fixed; inset:0; z-index:20; display:none; flex-direction:column; align-items:center;
+    justify-content:center; background:rgba(6,10,20,.82); padding:3vh 3vw; }
+  .panel { display:flex; flex-direction:column; align-items:center; gap:1.5vh; padding:3vh 5vw;
+    border-radius:22px; background:linear-gradient(180deg,#22304a,#141d2e); border:3px solid #ffcf5c;
+    box-shadow:0 14px 40px rgba(0,0,0,.6); width:100%; max-width:min(92vw, 640px);
+    box-sizing:border-box; overflow:hidden; }
+  .panel h2 { font-size:clamp(20px, 3.6vh, 40px); font-weight:900; color:#ffd34d; text-align:center;
+    text-shadow:0 3px 0 #a3341f; }
+  .stars { font-size:clamp(28px, 5.4vh, 60px); letter-spacing:.06em; color:#ffd34d; line-height:1.1;
+    text-align:center; }
   .stars .off { color:#42506b; }
-  .hline { display:flex; flex-wrap:wrap; justify-content:center; gap:clamp(8px, 3vw, 26px);
-    font-size:clamp(12px, 2.1vh, 19px); font-weight:800; }
+  .hline { display:flex; flex-wrap:wrap; justify-content:center; gap:2.5vw;
+    font-size:clamp(13px, 2.1vh, 22px); font-weight:800; text-align:center; }
   .hline span { color:#ffd34d; }
-  .panel .btns { display:flex; flex-wrap:wrap; justify-content:center;
-    gap:clamp(6px, 2vw, 18px); width:100%; }
-  .panel .btns .btn { flex:1 1 auto; min-width:min(28vw, 130px); }
+  .row { display:flex; flex-wrap:wrap; gap:2vw; justify-content:center; width:100%; }
+  .row .btn { flex:1 1 auto; min-width:0; }
 </style>
 </head>
 <body>
@@ -135,10 +117,10 @@
   <div class="units" id="hudBirds"></div>
 </div>
 
-<section id="menu" class="screen" style="display:none">
+<section id="menu" class="screen" style="display:flex">
   <div class="title">ANGRY BIRDS</div>
   <div class="subtitle">50 уровней · магазин · достижения</div>
-  <div class="coinbox">🪙 <span id="menuCoins">0</span> · ⭐ <span id="menuStars">0</span>/150</div>
+  <div class="coinbox">🪙 <span id="menuCoins">0</span> &nbsp;·&nbsp; ⭐ <span id="menuStars">0</span>/150</div>
   <button class="btn" id="btnPlay">Играть</button>
   <button class="btn alt" id="btnShop">Магазин</button>
   <button class="btn alt" id="btnAch">Достижения</button>
@@ -150,7 +132,7 @@
     <button class="btn ghost small" id="btnLevelsBack">← Меню</button>
     <div class="coinbox">🪙 <span id="levelsCoins">0</span></div>
   </div>
-  <div class="subtitle">Выбор уровня</div>
+  <div class="subtitle" style="margin-top:1vh">Выбор уровня</div>
   <div class="grid" id="levelsGrid"></div>
 </section>
 
@@ -179,7 +161,7 @@
     <div class="sw" id="swMusic"><span>🎵 Музыка</span><span class="dot"><i></i></span></div>
     <div class="sw" id="swVibe"><span>📳 Вибрация</span><span class="dot"><i></i></span></div>
   </div>
-  <div class="coinbox" id="setInfo" style="font-weight:600;color:#93a7c4;text-align:center;max-width:92vw">Angry Birds 1.0</div>
+  <div class="coinbox" id="setInfo" style="font-size:clamp(11px,1.6vh,16px);font-weight:600;color:#93a7c4;max-width:80vw;text-align:center">Angry Birds 1.0</div>
   <button class="btn ghost" id="btnReset">Сбросить прогресс</button>
   <button class="btn" id="btnSettingsBack">Назад</button>
 </section>
@@ -187,7 +169,7 @@
 <div id="ovPause" class="ov" style="display:none">
   <div class="panel">
     <h2>Пауза</h2>
-    <div class="btns">
+    <div class="row">
       <button class="btn" id="btnResume">Продолжить</button>
       <button class="btn alt" id="btnRestart">Заново</button>
       <button class="btn ghost" id="btnQuitP">В меню</button>
@@ -200,7 +182,7 @@
     <h2>Уровень пройден!</h2>
     <div class="stars" id="winStars">☆☆☆</div>
     <div class="hline">Очки: <span id="winScore">0</span> · Монеты: <span id="winCoins">0</span></div>
-    <div class="btns">
+    <div class="row">
       <button class="btn" id="btnNext">Далее</button>
       <button class="btn alt" id="btnReplay">Заново</button>
       <button class="btn ghost" id="btnQuitW">Меню</button>
@@ -212,7 +194,7 @@
   <div class="panel">
     <h2>Птицы закончились</h2>
     <div class="hline">Осталось свиней: <span id="losePigs">0</span></div>
-    <div class="btns">
+    <div class="row">
       <button class="btn" id="btnRetry">Заново</button>
       <button class="btn ghost" id="btnQuitL">Меню</button>
     </div>
