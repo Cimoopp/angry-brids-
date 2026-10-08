@@ -1,428 +1,371 @@
 /* ============================================================
-   ANGRY BIRDS — физика, столкновения, урон, способности,
-   исход уровня. Дополняет engine.js. Экспорт: дополняет window.ABG
+   ANGRY BIRDS — ФИЗИКА И ИГРОВАЯ ЛОГИКА
+   тела, столкновения, урон, способности, конец уровня.
+   Дополняет engine.js.  Экспорт: window.ABG (дополняется)
    ============================================================ */
 (function () {
 'use strict';
 var G = window.ABG;
-if (!G) { console.error('ABG не загружен — engine.js должен идти первым'); return; }
+if (!G) { console.error('ABG не загружен'); return; }
 
-var SUB = 0.008;   /* фиксированный шаг физики, с */
-
+var SUB = 1 / 120, MAXSUB = 4;
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
 function len(x, y) { return Math.sqrt(x * x + y * y); }
 
-/* ---------------- частицы и всплывашки ---------------- */
-G.burst = function (x, y, n, color, spd) {
-  var i;
-  for (i = 0; i < n; i++) {
-    var a = Math.random() * Math.PI * 2, v = (spd || 220) * (0.4 + Math.random() * 0.8);
-    G.parts.push({
-      x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 90,
-      r: 2 + Math.random() * 4, life: 0.5 + Math.random() * 0.6,
-      max: 1.1, color: color || '#ffffff'
-    });
-  }
+/* ---------------- создание тел ---------------- */
+function mkBlock(b) {
+  var m = G.MAT[b.mat] || G.MAT.wood;
+  var hp = m.hp * (1 + G.level * 0.02);
+  return { x: b.X, y: b.Y, w: b.W, h: b.H, vx: 0, vy: 0, mat: b.mat,
+           stat: b.stat, hp: hp, max: hp, dead: false, rest: 0 };
+}
+function mkPig(p) {
+  var hp = 55 + p.r * 3.4 + G.level * 3;
+  return { x: p.x, y: p.y, r: p.r, vx: 0, vy: 0, hp: hp, max: hp, dead: false,
+           still: 0, blink: 0 };
+}
+function mkBird(type) {
+  var B = G.BIRDS[type] || G.BIRDS.red;
+  return { type: type, x: G.SLING_X, y: G.SLING_Y, vx: 0, vy: 0, r: B.r,
+           mass: B.mass, state: 'ready', used: false, dead: false,
+           hp: B.hp * (G.has('helmet') ? 1.2 : 1), fly: 0, rot: 0 };
+}
+
+/* ---------------- постройка уровня ---------------- */
+var baseStart = G.startLevel;
+G.startLevel = function (n) {
+  var L = baseStart.call(G, n);
+  G.blocks = []; for (var i = 0; i < L.blocks.length; i++) G.blocks.push(mkBlock(L.blocks[i]));
+  G.pigs = [];   for (var j = 0; j < L.pigs.length; j++)   G.pigs.push(mkPig(L.pigs[j]));
+  G.birdsLeft = L.birds.slice();
+  G.active = G.birdsLeft.length ? mkBird(G.birdsLeft.shift()) : null;
+  G.flying = null; G.extraFlyers = []; G.parts = []; G.pops = [];
+  return L;
 };
 
-G.pop = function (x, y, text, color) {
-  G.pops.push({ x: x, y: y, t: 1, text: text, color: color || '#ffd34d' });
+/* ---------------- частицы и очки ---------------- */
+function part(x, y, col, n, force) {
+  for (var i = 0; i < (n || 8); i++) {
+    var a = Math.random() * Math.PI * 2, s = (0.4 + Math.random()) * (force || 220);
+    G.parts.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 90,
+                   r: 2 + Math.random() * 4, col: col, life: 0.6 + Math.random() * 0.5 });
+  }
+}
+function pop(x, y, txt, col) {
+  G.pops.push({ x: x, y: y, t: 1, txt: txt, col: col || '#ffe066' });
+}
+G.addScore = function (v, x, y, txt, col) {
+  G.score += v; G.save.total = (G.save.total || 0) + v;
+  if (x !== undefined) pop(x, y, txt || ('+' + v), col);
 };
+G.part = part;
+G.pop = pop;
 
-/* ---------------- урон ---------------- */
-function damage(tgt, amount, isPig, px, py) {
-  if (tgt.dead) return;
-  tgt.hp -= amount;
-  if (isPig) tgt.blink = 0.25;
-  if (tgt.hp <= 0) {
-    tgt.dead = true;
-    G.kills += isPig ? 1 : 0;
-    if (isPig) {
-      G.save.kills = (G.save.kills || 0) + 1;
-      G.score += 5000;
-      G.combo++;
-      G.burst(tgt.x, tgt.y, 20, '#8fd35a', 260);
-      G.pop(tgt.x, tgt.y - 20, '+' + 5000);
-      G.SFX.pig();
-      G.vibe(30);
-    } else {
-      var mt = G.MAT[tgt.m] || G.MAT.wood;
-      G.score += 500;
-      G.burst(tgt.x + tgt.w / 2, tgt.y + tgt.h / 2, 12, mt.fill, 200);
-      if (tgt.m === 'ice') G.SFX.ice();
-      else if (tgt.m === 'stone') G.SFX.stone();
-      else G.SFX.wood();
-    }
-  }
-}
-
-/* ---------------- геометрия ---------------- */
-function boxOf(t) { return { l: t.x, r: t.x + t.w, tp: t.y, b: t.y + t.h }; }
-
-function circleBox(cx, cy, cr, b) {
-  var nx = clamp(cx, b.x, b.x + b.w);
-  var ny = clamp(cy, b.y, b.y + b.h);
-  var dx = cx - nx, dy = cy - ny;
-  return { hit: dx * dx + dy * dy < cr * cr, nx: nx, ny: ny, dx: dx, dy: dy };
-}
-
-/* ---------------- столкновения ---------------- */
-function blockVsGround(b, h) {
-  if (b.static || b.dead) return;
-  var gy = G.GROUND_Y;
-  if (b.y + b.h > gy) {
-    var over = (b.y + b.h) - gy;
-    b.y -= over;
-    if (b.vy > 60) damage(b, Math.min(28, b.vy * 0.05), false);
-    b.vy = -b.vy * 0.18;
-    b.vx *= 0.82;
-    if (Math.abs(b.vy) < 12) b.vy = 0;
-  }
-  if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx) * 0.3; }
-}
-
-function blockVsBlock(a, b) {
-  if (a.dead || b.dead) return;
-  if (a.static && b.static) return;
-  var ox = (a.w + b.w) / 2 - Math.abs((a.x + a.w / 2) - (b.x + b.w / 2));
-  if (ox <= 0) return;
-  var oy = (a.h + b.h) / 2 - Math.abs((a.y + a.h / 2) - (b.y + b.h / 2));
-  if (oy <= 0) return;
-
-  var relV = Math.abs(a.vy - b.vy) + Math.abs(a.vx - b.vx);
-  if (ox < oy) {
-    /* расталкиваем по горизонтали */
-    if (!a.static && !b.static) {
-      a.x += (a.x < b.x ? -ox / 2 : ox / 2);
-      b.x += (b.x < a.x ? -ox / 2 : ox / 2);
-    } else if (!a.static) a.x += (a.x < b.x ? -ox : ox);
-    else b.x += (b.x < a.x ? -ox : ox);
-  } else {
-    if (!a.static && !b.static) {
-      a.y += (a.y < b.y ? -oy / 2 : oy / 2);
-      b.y += (b.y < a.y ? -oy / 2 : oy / 2);
-      var m = (a.vy + b.vy) / 2;
-      a.vy = b.vy = m * 0.2;
-    } else if (!a.static) {
-      a.y += (a.y < b.y ? -oy : oy);
-      a.vy = b.vy * 0.2;
-    } else {
-      b.y += (b.y < a.y ? -oy : oy);
-      b.vy = a.vy * 0.2;
-    }
-  }
-  if (relV > 220) {
-    damage(a, relV * 0.045, false);
-    damage(b, relV * 0.045, false);
-  }
-}
-
-function pigVsGround(p) {
-  if (p.dead) return;
-  var gy = G.GROUND_Y;
-  if (p.y + p.r > gy) {
-    p.y = gy - p.r;
-    if (p.vy > 260) damage(p, p.vy * 0.08, true, p.x, p.y);
-    p.vy = -p.vy * 0.22;
-    p.vx *= 0.8;
-    if (Math.abs(p.vy) < 14) p.vy = 0;
-  }
-}
-
-function pigVsBlock(p, b) {
-  if (p.dead || b.dead) return;
-  var c = circleBox(p.x, p.y, p.r, b);
-  if (!c.hit) return;
-  var d = len(c.dx, c.dy) || 0.001;
-  var push = p.r - d;
-  var nx = c.dx / d, ny = c.dy / d;
-  if (d < 0.001) { nx = 0; ny = -1; }
-  p.x += nx * push; p.y += ny * push;
-  var rel = Math.abs(p.vx) + Math.abs(p.vy);
-  if (rel > 200) damage(p, rel * 0.05, true, p.x, p.y);
-  p.vx *= 0.55; p.vy *= 0.55;
-}
-
-function flyerVsBlock(f, b) {
-  if (b.dead) return false;
-  var c = circleBox(f.x, f.y, f.r, b);
-  if (!c.hit) return false;
-  var d = len(c.dx, c.dy) || 0.001;
-  var nx = c.dx / d, ny = c.dy / d;
-  f.x += nx * (f.r - d);
-  f.y += ny * (f.r - d);
-
-  var sp = len(f.vx, f.vy);
-  var power = sp * 0.055 * (f.mass || 1);
-  if (G.has('feather')) power *= 1.2;
-  damage(b, power, false);
-  var mt = G.MAT[b.m] || G.MAT.wood;
-  if (mt.den > 1.2) power *= 0.45;
-  f.vx = (f.vx * 0.35) - nx * sp * 0.25 * (2 - mt.den);
-  f.vy = (f.vy * 0.35) - ny * sp * 0.25 * (2 - mt.den);
-  f.spin = (f.spin || 0) + (Math.random() - 0.5) * 6;
-  G.SFX.hit();
-  G.vibe(15);
-  return true;
-}
-
-function flyerVsPig(f, p) {
-  if (p.dead) return false;
-  var dx = f.x - p.x, dy = f.y - p.y;
-  var rr = f.r + p.r;
-  if (dx * dx + dy * dy > rr * rr) return false;
-  var d = len(dx, dy) || 0.001;
-  f.x += (dx / d) * (rr - d);
-  f.y += (dy / d) * (rr - d);
-  var sp = len(f.vx, f.vy);
-  var dmg = (f.dmg || 30) * (0.6 + sp / 900) * 0.9;
-  if (G.has('feather')) dmg *= 1.2;
-  damage(p, dmg, true, p.x, p.y);
-  f.vx *= 0.55; f.vy *= 0.55;
-  return true;
-}
-
-/* ---------------- способности ---------------- */
-G.useAbility = function () {
-  var f = G.flying;
-  if (!f || f.used) return false;
-  var B = G.BIRDS[f.type] || G.BIRDS.red;
-  f.used = true;
-
-  if (B.ability === 'boost') {
-    var sp = len(f.vx, f.vy) || 1;
-    var k = 2.1;
-    f.vx = (f.vx / sp) * sp * k;
-    f.vy = (f.vy / sp) * sp * k;
-    if (len(f.vx, f.vy) < 400) { f.vx = 700; f.vy = -180; }
-    G.SFX.boost();
-    G.burst(f.x, f.y, 10, '#ffe08a', 200);
-    return true;
-  }
-
-  if (B.ability === 'split') {
-    var i;
-    for (i = -1; i <= 1; i += 2) {
-      G.extraFlyers.push({
-        type: 'blue', x: f.x, y: f.y,
-        vx: f.vx * 0.94 + i * 120, vy: f.vy * 0.9 - i * 60,
-        r: 15, rot: 0, spin: 0, dmg: 20, mass: 0.6, color: '#4aa8e8', used: true
-      });
-    }
-    f.r = 15;
-    G.SFX.split();
-    return true;
-  }
-
-  if (B.ability === 'bomb') {
-    G.explode(f.x, f.y, 130, 120);
-    f.dead = true;
-    G.flying = null;
-    G.nextBird();
-    return true;
-  }
-  return false;
-};
-
-G.explode = function (x, y, radius, power) {
-  var i, d, dx, dy;
-  G.SFX.bomb();
-  G.vibe(60);
-  G.burst(x, y, 34, '#ffb347', 420);
-  G.burst(x, y, 18, '#ff5f1f', 320);
-
-  for (i = 0; i < G.blocks.length; i++) {
-    var b = G.blocks[i];
-    if (b.dead) continue;
-    dx = (b.x + b.w / 2) - x; dy = (b.y + b.h / 2) - y;
-    d = len(dx, dy);
-    if (d < radius) {
-      damage(b, power * (1 - d / radius), false);
-      b.vx += (dx / (d || 1)) * 260;
-      b.vy += (dy / (d || 1)) * 260 - 90;
-    }
-  }
-  for (i = 0; i < G.pigs.length; i++) {
-    var p = G.pigs[i];
-    if (p.dead) continue;
-    dx = p.x - x; dy = p.y - y; d = len(dx, dy);
-    if (d < radius + p.r) {
-      damage(p, power * 1.5 * (1 - d / (radius + p.r)), true, p.x, p.y);
-      p.vx += (dx / (d || 1)) * 320;
-      p.vy += (dy / (d || 1)) * 320 - 140;
-    }
-  }
-};
-
-/* ---------------- выстрел ---------------- */
+/* ---------------- птица и выстрел ---------------- */
 G.shoot = function () {
   var a = G.active;
   if (!a || a.state !== 'ready') return false;
   var dx = G.SLING_X - a.x, dy = G.SLING_Y - a.y;
   var d = len(dx, dy);
-  if (d < 14) { a.x = G.SLING_X; a.y = G.SLING_Y; return false; }
-
-  var spd = d * G.POWER * (G.has('gloves') ? 1.18 : 1);
-  a.state = 'fly';
-  a.vx = (dx / d) * spd;
-  a.vy = (dy / d) * spd;
-  if (G.has('wind')) a.vx += 45;
-  a.spin = 6;
-  G.flying = a;
-  G.active = null;
-  G.shots++;
-  G.save.shots = (G.save.shots || 0) + 1;
-  G.SFX.shoot();
-  G.vibe(20);
+  if (d < 12) {                             // слабое натяжение — возврат
+    a.x = G.SLING_X; a.y = G.SLING_Y; return false;
+  }
+  var pw = G.POWER * (G.has('boots') ? 1.1 : 1);
+  a.vx = dx * pw; a.vy = dy * pw;
+  a.state = 'fly'; a.fly = 0;
+  G.flying = a; G.active = null;
+  G.stats.shots++;
+  G.unlockAch('a1');
+  if (G.SFX.hit) G.SFX.hit();
+  G.vibe(18);
   return true;
 };
 
-/* ---------------- шаг физики ---------------- */
-function step(h) {
-  var g = G.GRAVITY, i, j;
+G.nextBird = function () {
+  if (G.flying || G.active) return;
+  if (G.birdsLeft.length) {
+    G.active = mkBird(G.birdsLeft.shift());
+  }
+};
 
-  /* летящая птица */
-  var flyers = [];
-  if (G.flying) flyers.push(G.flying);
-  for (i = 0; i < G.extraFlyers.length; i++) flyers.push(G.extraFlyers[i]);
-  for (i = 0; i < flyers.length; i++) {
-    var f = flyers[i];
-    f.vy += g * h;
-    f.x += f.vx * h;
-    f.y += f.vy * h;
-    f.rot = (f.rot || 0) + (f.spin || 0) * h;
+G.alivePigs = function () {
+  var c = 0; for (var i = 0; i < G.pigs.length; i++) if (!G.pigs[i].dead) c++;
+  return c;
+};
+
+/* ---------------- способности ---------------- */
+G.useAbility = function () {
+  var f = G.flying;
+  if (!f || f.used) return false;
+  var t = G.BIRDS[f.type].ability;
+  if (t === 'none') return false;
+  f.used = true;
+
+  if (t === 'boost') {
+    var s = len(f.vx, f.vy) || 1;
+    f.vx = f.vx / s * Math.max(s * 1.75, 900);
+    f.vy = f.vy / s * Math.max(s * 1.75, 900);
+    G.stats.boosts++;
+    if (G.SFX.boost) G.SFX.boost();
+    part(f.x, f.y, '#ffe066', 10, 180);
+    if (G.stats.boosts >= 10) G.unlockAch('a15');
+  } else if (t === 'split') {
+    for (var i = -1; i <= 1; i += 2) {
+      var b = mkBird('blue');
+      var ang = Math.atan2(f.vy, f.vx) + i * 0.22;
+      var sp = len(f.vx, f.vy) || 700;
+      b.x = f.x; b.y = f.y; b.state = 'fly';
+      b.vx = Math.cos(ang) * sp; b.vy = Math.sin(ang) * sp;
+      G.extraFlyers.push(b);
+    }
+    G.stats.splits++;
+    if (G.SFX.split) G.SFX.split();
+    if (G.stats.splits >= 10) G.unlockAch('a14');
+  } else if (t === 'bomb') {
+    explode(f.x, f.y, 165, 260);
+    G.stats.bombs++;
+    if (G.stats.bombs >= 10) G.unlockAch('a13');
+    f.dead = true;
+    G.flying = null;
+    G.nextBird();
+  }
+  return true;
+};
+
+function explode(x, y, R, power) {
+  if (G.SFX.boom) G.SFX.boom();
+  G.vibe(60);
+  part(x, y, '#ff9b3d', 26, 420);
+  part(x, y, '#fff2b0', 14, 300);
+  G.pops.push({ x: x, y: y, t: 1.2, txt: 'БУМ!', col: '#ff7b3d', big: true });
+
+  var i, d;
+  for (i = 0; i < G.blocks.length; i++) {
+    var b = G.blocks[i]; if (b.dead) continue;
+    d = Math.hypot(b.x + b.w / 2 - x, b.y + b.h / 2 - y);
+    if (d < R) hitBlock(b, power * (1 - d / R) * 2.2, 0, -1);
+  }
+  for (i = 0; i < G.pigs.length; i++) {
+    var p = G.pigs[i]; if (p.dead) continue;
+    d = Math.hypot(p.x - x, p.y - y);
+    if (d < R) killPig(p, 1.6);
+  }
+}
+G.explode = explode;
+
+/* ---------------- урон ---------------- */
+function hitBlock(b, dmg, nx, ny) {
+  if (b.dead || b.stat) return;
+  b.hp -= dmg;
+  if (nx) { b.vx += nx * dmg * 1.6; b.vy += ny * dmg * 1.6; }
+  if (b.hp <= 0) {
+    b.dead = true;
+    var m = G.MAT[b.mat];
+    var col = b.mat === 'ice' ? '#bfeaff' : (b.mat === 'stone' ? '#c9c9cf' : (b.mat === 'sand' ? '#e6d49a' : '#c98b3d'));
+    part(b.x + b.w / 2, b.y + b.h / 2, col, 10, 200);
+    G.stats.breaks++;
+    G.addScore(100, b.x + b.w / 2, b.y, '+100');
+    if (b.mat === 'ice' && G.SFX.ice) G.SFX.ice();
+    else if (b.mat === 'stone' && G.SFX.stone) G.SFX.stone();
+    else if (G.SFX.wood) G.SFX.wood();
+    if (G.stats.breaks >= 100) G.unlockAch('a9');
+  }
+}
+function killPig(p, force) {
+  if (p.dead) return;
+  p.dead = true;
+  part(p.x, p.y, '#9ddc6a', 12, 220);
+  G.stats.kills++;
+  G.addScore(1000, p.x, p.y, '+1000', '#9ddc6a');
+  if (G.SFX.pig) G.SFX.pig();
+  G.vibe(30);
+  if (G.stats.kills >= 25) G.unlockAch('a8');
+}
+
+/* ---------------- столкновения ---------------- */
+function hitCircleBox(c, b, dmgK) {
+  var cx = clamp(c.x, b.x, b.x + b.w), cy = clamp(c.y, b.y, b.y + b.h);
+  var dx = c.x - cx, dy = c.y - cy;
+  var d = len(dx, dy);
+  if (d >= c.r) return false;
+  var nx, ny;
+  if (d < 0.001) {
+    nx = 0; ny = -1;
+    c.y = b.y - c.r;
+  } else {
+    nx = dx / d; ny = dy / d;
+    var push = c.r - d;
+    c.x += nx * push; c.y += ny * push;
+  }
+  var rel = Math.abs(c.vx * nx + c.vy * ny) + Math.abs(b.vx * nx + b.vy * ny);
+  c.vx *= 0.62; c.vy *= 0.62;
+  b.vx -= nx * rel * 0.16; b.vy -= ny * rel * 0.16;
+  if (dmgK && rel > 90) hitBlock(b, rel * dmgK * (c.mass || 1) / 4, nx, ny);
+  return true;
+}
+function hitBoxBox(a, b) {
+  var ox = (a.w + b.w) / 2 - Math.abs((a.x + a.w / 2) - (b.x + b.w / 2));
+  if (ox <= 0) return false;
+  var oy = (a.h + b.h) / 2 - Math.abs((a.y + a.h / 2) - (b.y + b.h / 2));
+  if (oy <= 0) return false;
+  if (ox < oy) { a.x -= Math.sign(a.x - b.x) * ox * 0.5; b.x += Math.sign(a.x - b.x) * ox * 0.5; }
+  else         { a.y -= Math.sign(a.y - b.y) * oy * 0.5; b.y += Math.sign(a.y - b.y) * oy * 0.5; }
+  return true;
+}
+
+/* ---------------- шаг физики ---------------- */
+function step(dt) {
+  var i, j, b, p;
+
+  /* блоки */
+  for (i = 0; i < G.blocks.length; i++) {
+    b = G.blocks[i]; if (b.dead) continue;
+    b.vy += G.GRAVITY * dt;
+    b.vx *= 0.995; b.vy *= 0.995;
+    b.x += b.vx * dt; b.y += b.vy * dt;
+
+    if (b.y + b.h > G.GROUND_Y) {              // земля
+      b.y = G.GROUND_Y - b.h;
+      if (b.vy > 120) hitBlock(b, (b.vy - 120) * 0.22, 0, -1);
+      b.vy = 0; b.vx *= 0.82;
+    }
+    if (b.x < 0) { b.x = 0; b.vx = 0; }
   }
 
-  /* свободные блоки */
+  /* блок ↔ блок */
   for (i = 0; i < G.blocks.length; i++) {
-    var b = G.blocks[i];
-    if (b.dead || b.static) continue;
-    b.vy += g * h;
-    b.x += b.vx * h;
-    b.y += b.vy * h;
-    b.vx *= 0.999;
+    var a = G.blocks[i]; if (a.dead) continue;
+    for (j = i + 1; j < G.blocks.length; j++) {
+      b = G.blocks[j]; if (b.dead) continue;
+      if (hitBoxBox(a, b)) {
+        var rel = Math.abs(a.vx - b.vx) + Math.abs(a.vy - b.vy);
+        if (rel > 70) {
+          hitBlock(a, rel * 0.035, 0, 0);
+          hitBlock(b, rel * 0.035, 0, 0);
+        }
+      }
+    }
+  }
+
+  /* птицы */
+  var all = [];
+  if (G.flying) all.push(G.flying);
+  for (i = 0; i < G.extraFlyers.length; i++) all.push(G.extraFlyers[i]);
+
+  for (i = 0; i < all.length; i++) {
+    var f = all[i]; if (f.dead) continue;
+    f.vy += G.GRAVITY * dt;
+    f.x += f.vx * dt; f.y += f.vy * dt;
+    f.rot = Math.atan2(f.vy, f.vx);
+    f.fly += dt;
+
+    for (j = 0; j < G.blocks.length; j++) {
+      b = G.blocks[j]; if (b.dead) continue;
+      hitCircleBox(f, b, 1.0);
+    }
+    for (j = 0; j < G.pigs.length; j++) {
+      p = G.pigs[j]; if (p.dead) continue;
+      var dx = f.x - p.x, dy = f.y - p.y, d = len(dx, dy);
+      if (d < f.r + p.r) {
+        var sp = len(f.vx, f.vy);
+        if (sp > 200) killPig(p, 1);
+        else if (sp > 90) { p.hp -= sp * 0.35; if (p.hp <= 0) killPig(p, 1); }
+        var nx = (dx / (d || 1)), ny = (dy / (d || 1));
+        var push = f.r + p.r - d;
+        f.x += nx * push; f.y += ny * push;
+        f.vx *= 0.55; f.vy *= 0.55;
+      }
+    }
+    if (f.y + f.r > G.GROUND_Y) {
+      f.y = G.GROUND_Y - f.r;
+      if (f.vy > 260) f.vx *= 0.5;
+      f.vy = -f.vy * 0.28;
+      f.vx *= 0.7;
+      if (Math.abs(f.vx) < 40) f.vx = 0;
+    }
   }
 
   /* свиньи */
   for (i = 0; i < G.pigs.length; i++) {
-    var p = G.pigs[i];
-    if (p.dead) continue;
-    p.vy += g * h;
-    p.x += p.vx * h;
-    p.y += p.vy * h;
-    p.vx *= 0.998;
-    if (p.blink > 0) p.blink -= h;
-  }
+    p = G.pigs[i]; if (p.dead) continue;
+    p.vy += G.GRAVITY * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.94; p.vy *= 0.94;
 
-  /* земля */
-  for (i = 0; i < G.blocks.length; i++) blockVsGround(G.blocks[i], h);
-  for (i = 0; i < G.pigs.length; i++) pigVsGround(G.pigs[i]);
-
-  /* блок-блок */
-  var n = G.blocks.length;
-  for (i = 0; i < n; i++) {
-    if (G.blocks[i].dead) continue;
-    for (j = 0; j < n; j++) {
-      if (i === j || G.blocks[j].dead) continue;
-      blockVsBlock(G.blocks[i], G.blocks[j]);
+    if (p.y + p.r > G.GROUND_Y) {
+      p.y = G.GROUND_Y - p.r;
+      if (p.vy > 220) { p.hp -= (p.vy - 220) * 0.3; if (p.hp <= 0) { killPig(p, 1); continue; } }
+      p.vy = 0;
     }
-  }
-
-  /* птица-блок, птица-свинья */
-  for (i = 0; i < flyers.length; i++) {
-    var fl = flyers[i];
-    var spent = false;
     for (j = 0; j < G.blocks.length; j++) {
-      if (G.blocks[j].dead) continue;
-      if (flyerVsBlock(fl, G.blocks[j])) spent = true;
+      b = G.blocks[j]; if (b.dead) continue;
+      hitCircleBox(p, b, 0);
     }
-    for (j = 0; j < G.pigs.length; j++) {
-      if (G.pigs[j].dead) continue;
-      if (flyerVsPig(fl, G.pigs[j])) spent = true;
-    }
-    if (spent && fl.type === 'black' && !fl.used) {
-      fl.used = true;
-      G.explode(fl.x, fl.y, 120, 110);
-      if (G.flying === fl) { G.flying = null; G.nextBird(); }
-    }
+    if (p.hp <= 0) killPig(p, 1);
   }
 
-  /* свинья-блок */
-  for (i = 0; i < G.pigs.length; i++) {
-    if (G.pigs[i].dead) continue;
-    for (j = 0; j < G.blocks.length; j++) {
-      if (G.blocks[j].dead) continue;
-      pigVsBlock(G.pigs[i], G.blocks[j]);
-    }
+  /* убираем мёртвых и упавших */
+  for (i = G.blocks.length - 1; i >= 0; i--) {
+    b = G.blocks[i];
+    if (b.dead || b.y > G.GROUND_Y + 400) G.blocks.splice(i, 1);
   }
-}
-
-/* ---------------- очистка ---------------- */
-function cleanup() {
-  var i;
-  for (i = G.blocks.length - 1; i >= 0; i--) if (G.blocks[i].dead) G.blocks.splice(i, 1);
   for (i = G.pigs.length - 1; i >= 0; i--) if (G.pigs[i].dead) G.pigs.splice(i, 1);
-  for (i = G.extraFlyers.length - 1; i >= 0; i--) {
-    var e = G.extraFlyers[i];
-    if (e.dead || e.x < -120 || e.x > G.WORLD_W + 120 || e.y > G.GROUND_Y + 140) G.extraFlyers.splice(i, 1);
-  }
 }
 
 G.physics = function (dt) {
-  if (G.state !== 'play') return;
-  var h = Math.min(dt || 0.016, 0.04);
-  var steps = Math.max(1, Math.round(h / SUB));
-  var sub = h / steps, i;
-  for (i = 0; i < steps; i++) step(sub);
-  cleanup();
-  G.t += h;
+  if (!G.started) return;
+  var n = clamp(Math.round(dt / SUB), 1, MAXSUB);
+  var h = dt / n;
+  for (var s = 0; s < n; s++) step(h);
 };
 
-/* ---------------- исход уровня ---------------- */
+/* ---------------- конец уровня ---------------- */
 G.finishLevel = function () {
-  var stars;
-  var left = G.birdsLeft.length + (G.flying ? 1 : 0);
-  if (left >= 3) stars = 3;
-  else if (left === 2) stars = 2;
-  else stars = 1;
+  var left = G.birdsLeft.length + (G.active ? 1 : 0) + (G.flying ? 1 : 0);
+  var stars = left >= 2 ? 3 : (left === 1 ? 2 : 1);
+  var coins = 30 + stars * 25 + Math.floor(G.score / 400);
 
-  var coins = 60 + stars * 30 + Math.floor(G.score / 600);
-  if (G.has('magnet'))  coins = Math.round(coins * 1.15);
-  if (G.has('helmet'))  coins = Math.round(coins * 1.3);
-
-  var prev = G.save.stars[G.level] || 0;
-  if (stars > prev) G.save.stars[G.level] = stars;
-  if (stars === 3) G.save.perfect = (G.save.perfect || 0) + 1;
-  if (left >= 3)   G.save.oneBird = (G.save.oneBird || 0) + 1;
+  var best = G.starsOf(G.level);
+  if (stars > best) G.save.stars[G.level] = stars;
+  else if (!best) G.save.stars[G.level] = stars;
 
   G.save.coins += coins;
-  if (G.level >= G.save.maxLevel) G.save.maxLevel = Math.min(G.TOTAL_LEVELS, G.level + 1);
+  if (G.level + 1 > (G.save.unlocked || 1)) G.save.unlocked = Math.min(G.TOTAL_LEVELS, G.level + 1);
   G.store();
-  G.checkAch();
+
+  if (stars === 3) G.unlockAch('a3');
+  G.unlockAch('a2');
+  if (G.levelsDone() >= 5)  G.unlockAch('a4');
+  if (G.levelsDone() >= 10) G.unlockAch('a5');
+  if (G.levelsDone() >= 25) G.unlockAch('a6');
+  if (G.levelsDone() >= 50) G.unlockAch('a7');
+  if (coins && G.save.coins >= 1000) G.unlockAch('a16');
+  G.stats.winStreak = (G.stats.winStreak || 0) + 1;
+  if (G.stats.winStreak >= 3) G.unlockAch('a19');
+  if (left >= 3) G.unlockAch('a12');
+  if (G.save.total >= 50000) G.unlockAch('a20');
 
   G.lastWin = { stars: stars, coins: coins, score: G.score };
+  if (G.SFX.win) G.SFX.win();
   return G.lastWin;
 };
 
 G.checkEnd = function (dt) {
-  if (G.state !== 'play' || !G.started) return null;
+  if (!G.started || G.state !== 'play') return null;
 
-  var pigs = G.alivePigs();
-
-  if (pigs === 0) {
+  if (G.alivePigs() === 0) {
     G.winT += dt;
-    if (G.winT > 0.45) { G.started = false; G.finishLevel(); return 'win'; }
+    if (G.winT > 0.45) return 'win';
     return null;
   }
+  G.winT = 0;
 
-  var flying = !!G.flying;
-  var extra = G.extraFlyers.length > 0;
-  var waiting = G.active && G.active.state === 'ready';
-  if (flying || extra || waiting) { G.loseT = 0; return null; }
-
-  if (G.birdsLeft.length === 0 && !G.active && !G.flying) {
+  var busy = G.flying || G.active || G.extraFlyers.length;
+  if (!busy) {
     G.loseT += dt;
-    if (G.loseT > 0.9) { G.started = false; return 'lose'; }
+    if (G.loseT > 0.9) return 'lose';
+  } else {
+    G.loseT = 0;
   }
   return null;
 };
