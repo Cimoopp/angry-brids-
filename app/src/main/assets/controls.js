@@ -1,56 +1,41 @@
 /* ============================================================
-   ANGRY BIRDS — управление, переходы уровня, кнопки, запуск
+   ANGRY BIRDS — управление, переходы, кнопки, запуск
    Экспорт: window.ABC
    ============================================================ */
-(function () {
+window.ABC = (function () {
 'use strict';
-
-var G = window.ABG, R = window.ABR;
-if (!G || !R) { console.error('ABG/ABR не загружены'); return; }
-
-/* ---- мягкая зависимость от ui.js: без него игра всё равно идёт ---- */
-var U = window.ABUI;
-if (!U) {
-  U = {
-    show: function () { }, hide: function () { }, reveal: function () { },
-    money: function () { }, renderSettings: function () { },
-    syncHud: function () { }, syncScore: function () { },
-    resetCounters: function () { G.score = 0; }
-  };
-  console.error('ui.js не загружен — интерфейс отключён');
-}
-
-/* ---- латаем расхождения имён между модулями ---- */
-if (!G.hasAch && G.achDone) {
-  G.hasAch = function (id) { return G.achDone(id); };
-}
-var ICONS = { gloves: '🧤', goggles: '🥽', helmet: '⛑', boots: '👟', bag: '🎒' };
-if (G.ITEMS) {
-  for (var q = 0; q < G.ITEMS.length; q++) {
-    if (!G.ITEMS[q].icon) G.ITEMS[q].icon = ICONS[G.ITEMS[q].id] || '🎁';
-  }
-}
+var G = window.ABG, R = window.ABR, U = window.ABUI;
+if (!G || !R) { console.error('ABG или ABR не загружены'); return null; }
+/* заглушка, если модуль интерфейса не поднялся */
+var UIO = U || {
+  show: function () {}, hide: function () {}, reveal: function () {},
+  resetCounters: function () {}, money: function () {}, renderSettings: function () {},
+  syncHud: function () {}, syncScore: function () {}
+};
 
 function $(id) { return document.getElementById(id); }
 var dragging = false;
 
-/* ---------------- переходы ---------------- */
+function setDrag(v) { dragging = v; G.dragging = v; }
+
+/* ---------- переходы ---------- */
 function beginLevel(n) {
   G.startLevel(n);
   R.setCam(0);
   R.snap();
-  dragging = false;
-  U.resetCounters();
-  U.show(null);
-  U.syncHud();
-  U.syncScore();
+  setDrag(false);
+  UIO.resetCounters();
+  UIO.show(null);
+  UIO.syncHud();
+  UIO.syncScore();
 }
 
 function goMenu() {
   G.state = 'menu';
   G.started = false;
-  G.musicStop();
-  U.show('menu');
+  if (G.musicStop) G.musicStop();
+  UIO.show('menu');
+  UIO.money();
 }
 
 function onWin() {
@@ -66,26 +51,26 @@ function onWin() {
   var b = $('winCoins'); if (b) b.textContent = w.coins;
   var nx = $('btnNext');
   if (nx) nx.style.display = (G.level < G.TOTAL_LEVELS) ? '' : 'none';
-  U.hide($('hud'));
-  U.reveal($('ovWin'), 'flex');
+  UIO.hide($('hud'));
+  UIO.reveal($('ovWin'), 'flex');
 }
 
 function onLose() {
   G.state = 'lose';
   var lp = $('losePigs');
-  if (lp) lp.textContent = G.alivePigs();
-  U.hide($('hud'));
-  U.reveal($('ovLose'), 'flex');
+  if (lp) lp.textContent = G.alivePigs ? G.alivePigs() : 0;
+  UIO.hide($('hud'));
+  UIO.reveal($('ovLose'), 'flex');
 }
 
 function pause() {
   if (G.state !== 'play') return;
   G.state = 'pause';
-  U.reveal($('ovPause'), 'flex');
+  UIO.reveal($('ovPause'), 'flex');
 }
 
 function resume() {
-  U.hide($('ovPause'));
+  UIO.hide($('ovPause'));
   if (G.state === 'pause') G.state = 'play';
 }
 
@@ -94,13 +79,13 @@ function onBack() {
   if (G.state === 'pause') { resume(); return true; }
   if (G.state === 'play') { pause(); return true; }
   var m = $('menu');
-  var onMenu = !m || m.style.display !== 'none';
-  if (!onMenu) { U.show('menu'); return true; }
+  var onMenu = !m || (m.style.display !== 'none');
+  if (!onMenu) { UIO.show('menu'); return true; }
   return false;
 }
 
-/* ---------------- ввод ---------------- */
-function point(e) {
+/* ---------- касания ---------- */
+function pt(e) {
   if (e.touches && e.touches.length) return e.touches[0];
   if (e.changedTouches && e.changedTouches.length) return e.changedTouches[0];
   return e;
@@ -108,36 +93,29 @@ function point(e) {
 
 function onDown(e) {
   if (G.state !== 'play') return;
-  var p = point(e);
-  var w = R.toWorld(p.clientX, p.clientY);
-
-  if (G.ac) G.ac();
-
-  if (G.flying && !G.flying.used) {
-    if (G.useAbility()) {
-      if (e.cancelable) e.preventDefault();
-      return;
-    }
-  }
-
-  if (G.active && G.active.state === 'ready') {
-    var dx = w.x - G.active.x, dy = w.y - G.active.y;
-    if (Math.sqrt(dx * dx + dy * dy) < 200) {
-      dragging = true;
-      if (G.SFX.pull) G.SFX.pull();
-      drag(p);
-    }
-  }
   if (e.cancelable && e.type === 'touchstart') e.preventDefault();
+  if (G.ac) G.ac();
+  if (G.flying && !G.flying.used && G.useAbility) { if (G.useAbility()) return; }
+  var p = pt(e);
+  var w = R.toWorld(p.clientX, p.clientY);
+  var a = G.active;
+  if (a && a.state === 'ready') {
+    var dx = w.x - a.x, dy = w.y - a.y;
+    if (Math.sqrt(dx * dx + dy * dy) < 200) {
+      setDrag(true);
+      if (G.SFX && G.SFX.pull) G.SFX.pull();
+      move(p);
+    }
+  }
 }
 
-function drag(p) {
+function move(p) {
   var a = G.active;
   if (!a) return;
   var w = R.toWorld(p.clientX, p.clientY);
   var dx = w.x - G.SLING_X, dy = w.y - G.SLING_Y;
   var d = Math.sqrt(dx * dx + dy * dy);
-  var maxPull = G.MAX_PULL * (G.has('gloves') ? 1.18 : 1);
+  var maxPull = G.MAX_PULL * ((G.has && G.has('gloves')) ? 1.18 : 1);
   if (d > maxPull) { dx = dx / d * maxPull; dy = dy / d * maxPull; }
   a.x = G.SLING_X + dx;
   a.y = G.SLING_Y + dy;
@@ -145,47 +123,41 @@ function drag(p) {
 
 function onMove(e) {
   if (!dragging || G.state !== 'play') return;
-  drag(point(e));
+  move(pt(e));
   if (e.cancelable) e.preventDefault();
 }
 
 function onUp() {
   if (!dragging) return;
-  dragging = false;
-  if (G.shoot() && G.flying) R.follow(G.flying.x);
+  setDrag(false);
+  if (G.shoot && G.shoot() && G.flying) R.follow(G.flying.x);
 }
 
-/* ---------------- кнопки ---------------- */
+/* ---------- кнопки ---------- */
 function bind() {
   function on(id, fn) { var el = $(id); if (el) el.addEventListener('click', fn); }
-  function click() { if (G.SFX.click) G.SFX.click(); }
+  function tick() { if (G.SFX && G.SFX.click) G.SFX.click(); }
 
-  on('btnPlay', function () { click(); U.show('levels'); });
-  on('btnShop', function () { click(); U.show('shop'); });
-  on('btnAch', function () { click(); U.show('ach'); });
-  on('btnSettings', function () { click(); U.show('settings'); });
-  on('btnLevelsBack', function () { click(); U.show('menu'); });
-  on('btnShopBack', function () { click(); U.show('menu'); });
-  on('btnAchBack', function () { click(); U.show('menu'); });
-  on('btnSettingsBack', function () { click(); U.show('menu'); });
+  on('btnPlay', function () { tick(); UIO.show('levels'); });
+  on('btnShop', function () { tick(); UIO.show('shop'); });
+  on('btnAch', function () { tick(); UIO.show('ach'); });
+  on('btnSettings', function () { tick(); UIO.show('settings'); });
+  on('btnLevelsBack', function () { tick(); UIO.show('menu'); });
+  on('btnShopBack', function () { tick(); UIO.show('menu'); });
+  on('btnAchBack', function () { tick(); UIO.show('menu'); });
+  on('btnSettingsBack', function () { tick(); UIO.show('menu'); });
 
-  on('swSound', function () {
-    G.save.sound = !G.save.sound; G.store(); click(); U.renderSettings();
-  });
+  on('swSound', function () { G.save.sound = !G.save.sound; G.store(); tick(); UIO.renderSettings(); });
   on('swMusic', function () {
-    G.save.music = !G.save.music; G.store(); U.renderSettings();
-    if (G.save.music) G.musicStart(); else G.musicStop();
+    G.save.music = !G.save.music; G.store(); UIO.renderSettings();
+    if (G.save.music) { if (G.musicStart) G.musicStart(); } else if (G.musicStop) G.musicStop();
   });
-  on('swVibe', function () {
-    G.save.vibe = !G.save.vibe; G.store(); G.vibe(25); U.renderSettings();
-  });
+  on('swVibe', function () { G.save.vibe = !G.save.vibe; G.store(); if (G.vibe) G.vibe(25); UIO.renderSettings(); });
 
   on('btnReset', function () {
-    G.resetProgress();
-    U.resetCounters();
-    U.renderSettings();
-    U.money();
-    if (G.SFX.hit) G.SFX.hit();
+    if (G.resetProgress) G.resetProgress();
+    UIO.resetCounters(); UIO.renderSettings(); UIO.money();
+    if (G.SFX && G.SFX.hit) G.SFX.hit();
   });
 
   on('btnPause', pause);
@@ -201,13 +173,12 @@ function bind() {
   on('btnQuitL', goMenu);
 }
 
-/* ---------------- запуск ---------------- */
+/* ---------- запуск ---------- */
 var started = false;
 function init() {
   if (started) return true;
   if (!R.init()) return false;
   bind();
-
   var cv = $('cv');
   if (cv) {
     cv.addEventListener('touchstart', onDown, { passive: false });
@@ -218,25 +189,17 @@ function init() {
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   }
-
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-  U.show('menu');
-  U.money();
+  UIO.show('menu');
+  UIO.money();
   started = true;
   return true;
 }
 
-window.ABC = {
-  init: init,
-  beginLevel: beginLevel,
-  goMenu: goMenu,
-  onWin: onWin,
-  onLose: onLose,
-  onBack: onBack,
-  pause: pause,
-  resume: resume
+return {
+  init: init, beginLevel: beginLevel, goMenu: goMenu,
+  onWin: onWin, onLose: onLose, onBack: onBack,
+  pause: pause, resume: resume
 };
-
 })();
