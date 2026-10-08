@@ -1,5 +1,5 @@
 /* ============================================================
-   ANGRY BIRDS — интерфейс: экраны, HUD, списки, магазин
+   ANGRY BIRDS — интерфейс: экраны, магазин, достижения, HUD
    Экспорт: window.ABUI
    ============================================================ */
 window.ABUI = (function () {
@@ -8,25 +8,18 @@ var G = window.ABG;
 if (!G) { console.error('ABG не загружен'); return null; }
 
 var SCREENS = ['menu', 'levels', 'shop', 'ach', 'settings'];
-var OVERS = ['ovPause', 'ovWin', 'ovLose'];
+var OVERLAYS = ['ovPause', 'ovWin', 'ovLose'];
 
 function $(id) { return document.getElementById(id); }
 
-/* ---------- скрытие / показ ---------- */
-function hide(el) {
-  if (!el) return;
-  el.classList.add('hidden');
-  el.style.display = 'none';
-  el.style.visibility = 'hidden';
-}
-
-function reveal(el, disp) {
+function hide(el) { if (el) { el.style.display = 'none'; el.classList.add('hidden'); } }
+function reveal(el, mode) {
   if (!el) return;
   el.classList.remove('hidden');
-  el.style.visibility = 'visible';
-  el.style.display = disp || 'flex';
+  el.style.display = mode || 'flex';
 }
 
+/* ---------- переключение экранов ---------- */
 function show(name) {
   var i, el;
   for (i = 0; i < SCREENS.length; i++) {
@@ -35,233 +28,171 @@ function show(name) {
     if (SCREENS[i] === name) reveal(el, 'flex');
     else hide(el);
   }
-  for (i = 0; i < OVERS.length; i++) hide($(OVERS[i]));
+  for (i = 0; i < OVERLAYS.length; i++) hide($(OVERLAYS[i]));
 
   var hud = $('hud');
-  if (hud) {
-    if (name) hide(hud);
-    else reveal(hud, 'block');
-  }
+  if (!name) reveal(hud, 'block');
+  else hide(hud);
 
   if (name === 'levels') renderLevels();
-  if (name === 'shop') renderShop();
-  if (name === 'ach') renderAch();
-  if (name === 'settings') renderSettings();
+  else if (name === 'shop') renderShop();
+  else if (name === 'ach') renderAch();
+  else if (name === 'settings') renderSettings();
   money();
 }
 
-/* ---------- монеты и звёзды ---------- */
+/* ---------- деньги и звёзды ---------- */
 function money() {
-  var c = G.save.coins | 0;
-  var st = G.starsTotal();
   var ids = ['menuCoins', 'levelsCoins', 'shopCoins'];
-  for (var i = 0; i < ids.length; i++) {
-    var el = $(ids[i]);
-    if (el) el.textContent = c;
+  var i, el;
+  for (i = 0; i < ids.length; i++) {
+    el = $(ids[i]);
+    if (el) el.textContent = G.coins();
   }
-  var ms = $('menuStars'); if (ms) ms.textContent = st;
-  var a1 = $('achDone'); if (a1) a1.textContent = G.achCount();
-  var a2 = $('achTotal'); if (a2) a2.textContent = G.ACH.length;
-}
-
-/* ---------- HUD ---------- */
-function syncHud() {
-  var l = $('hudLevel'); if (l) l.textContent = 'Уровень ' + G.level;
-  var p = $('hudPigs'); if (p) p.textContent = '🐷 ' + G.alivePigs();
-  syncScore();
-
-  var box = $('hudBirds');
-  if (!box) return;
-  box.innerHTML = '';
-  var order = [];
-  if (G.active) order.push(G.active.type);
-  for (var i = 0; i < G.birdsLeft.length; i++) order.push(G.birdsLeft[i]);
-  for (var j = 0; j < order.length; j++) {
-    var d = document.createElement('div');
-    d.className = 'pip ' + order[j];
-    var B = G.BIRDS[order[j]];
-    if (B) {
-      d.style.background = B.fill;
-      d.style.borderColor = B.edge || 'rgba(0,0,0,.45)';
-    }
-    box.appendChild(d);
-  }
-}
-
-function syncScore() {
-  var s = $('hudScore');
-  if (s) s.textContent = G.score | 0;
-}
-
-function resetCounters() {
-  G.score = 0;
-  syncScore();
-  syncHud();
+  el = $('menuStars');
+  if (el) el.textContent = G.starsTotal();
+  el = $('achDone');
+  if (el) el.textContent = G.achCount();
+  el = $('achTotal');
+  if (el) el.textContent = G.ACH.length;
 }
 
 /* ---------- уровни ---------- */
 function renderLevels() {
   var grid = $('levelsGrid');
   if (!grid) return;
-  grid.innerHTML = '';
-  var unlocked = G.save.unlocked | 0;
-  if (unlocked < 1) unlocked = 1;
-  var i;
-  for (i = 1; i <= G.TOTAL_LEVELS; i++) {
-    (function (n) {
-      var d = document.createElement('div');
-      var open = n <= unlocked;
-      d.className = 'lvl ' + (open ? 'open' : 'locked');
-      var num = document.createElement('div');
-      num.textContent = n;
-      d.appendChild(num);
-      var st = document.createElement('div');
-      st.className = 'st';
-      var stars = G.starOf(n);
-      st.textContent = open ? (stars ? '★'.repeat(stars) : '') : '🔒';
-      d.appendChild(st);
-      if (open) {
-        d.addEventListener('click', function () {
-          if (G.SFX.click) G.SFX.click();
-          if (window.ABC) window.ABC.beginLevel(n);
-        });
-      }
-      grid.appendChild(d);
-    })(i);
+  var open = G.maxUnlocked();
+  var html = '', n, st, i;
+  for (n = 1; n <= G.TOTAL_LEVELS; n++) {
+    st = G.starsOf(n);
+    var pip = '';
+    for (i = 0; i < 3; i++) pip += (i < st) ? '★' : '·';
+    var cls = (n <= open) ? 'lvl open' : 'lvl locked';
+    html += '<div class="' + cls + '" data-lvl="' + n + '">' + n +
+            '<div class="st">' + pip + '</div></div>';
   }
-  money();
+  grid.innerHTML = html;
+
+  var items = grid.querySelectorAll('.lvl');
+  var k;
+  for (k = 0; k < items.length; k++) {
+    items[k].addEventListener('click', function () {
+      var n2 = parseInt(this.getAttribute('data-lvl'), 10);
+      if (n2 > G.maxUnlocked()) { if (G.SFX.hit) G.SFX.hit(); return; }
+      if (G.SFX.click) G.SFX.click();
+      if (window.ABC && window.ABC.beginLevel) window.ABC.beginLevel(n2);
+    });
+  }
 }
 
 /* ---------- магазин ---------- */
 function renderShop() {
-  var list = $('shopList');
-  if (!list) return;
-  list.innerHTML = '';
-  var ids = Object.keys(G.ITEMS), i;
-  for (i = 0; i < ids.length; i++) {
-    (function (id) {
-      var it = G.ITEMS[id];
-      var owned = G.has(id);
-      var card = document.createElement('div');
-      card.className = 'card' + (owned ? ' done' : '');
-
-      var ico = document.createElement('div');
-      ico.className = 'ico';
-      ico.textContent = it.ico;
-      card.appendChild(ico);
-
-      var txt = document.createElement('div');
-      txt.className = 'txt';
-      var nm = document.createElement('div');
-      nm.className = 'nm';
-      nm.textContent = it.name;
-      var ds = document.createElement('div');
-      ds.className = 'ds';
-      ds.textContent = it.desc;
-      txt.appendChild(nm);
-      txt.appendChild(ds);
-      card.appendChild(txt);
-
-      var btn = document.createElement('button');
-      btn.className = 'btn small' + (owned ? ' ghost' : '');
-      btn.textContent = owned ? 'Куплено' : (it.price + ' 🪙');
-      btn.addEventListener('click', function () {
-        if (G.SFX.click) G.SFX.click();
-        var ok = G.buy(id);
-        if (ok) {
-          if (G.SFX.win) G.SFX.win();
-          G.pop('🛒 ' + it.name, G.WORLD_W * 0.4, 180, '#8ef07a');
-        } else if (!owned && G.save.coins < it.price) {
-          if (G.SFX.hit) G.SFX.hit();
-        }
-        renderShop();
-        money();
-      });
-      card.appendChild(btn);
-      list.appendChild(card);
-    })(ids[i]);
+  var box = $('shopList');
+  if (!box) return;
+  var html = '', i, it, own;
+  for (i = 0; i < G.ITEMS.length; i++) {
+    it = G.ITEMS[i];
+    own = G.has(it.id);
+    html += '<div class="card' + (own ? ' done' : '') + '" data-item="' + it.id + '">' +
+            '<div class="ico">' + it.icon + '</div>' +
+            '<div class="txt"><div class="nm">' + it.name + '</div>' +
+            '<div class="ds">' + it.desc + '</div></div>' +
+            '<button class="btn small' + (own ? ' ghost' : ' alt') + '" style="min-width:0">' +
+            (own ? 'Куплено' : '🪙 ' + it.price) + '</button></div>';
   }
-  money();
+  box.innerHTML = html;
+
+  var cards = box.querySelectorAll('.card');
+  var k;
+  for (k = 0; k < cards.length; k++) {
+    cards[k].addEventListener('click', function () {
+      var id = this.getAttribute('data-item');
+      if (G.has(id)) return;
+      if (G.buy(id)) {
+        if (G.SFX.coin) G.SFX.coin();
+        renderShop();
+      } else if (G.SFX.hit) G.SFX.hit();
+      money();
+    });
+  }
 }
 
 /* ---------- достижения ---------- */
 function renderAch() {
-  var list = $('achList');
-  if (!list) return;
-  list.innerHTML = '';
-  var i;
+  var box = $('achList');
+  if (!box) return;
+  var html = '', i, a, done;
   for (i = 0; i < G.ACH.length; i++) {
-    var a = G.ACH[i];
-    var done = !!G.save.ach[a.id];
-    var card = document.createElement('div');
-    card.className = 'card' + (done ? ' done' : '');
-
-    var ico = document.createElement('div');
-    ico.className = 'ico';
-    ico.textContent = done ? a.ico : '🔒';
-    card.appendChild(ico);
-
-    var txt = document.createElement('div');
-    txt.className = 'txt';
-    var nm = document.createElement('div');
-    nm.className = 'nm';
-    nm.textContent = a.name;
-    var ds = document.createElement('div');
-    ds.className = 'ds';
-    ds.textContent = a.desc;
-    txt.appendChild(nm);
-    txt.appendChild(ds);
-    card.appendChild(txt);
-
-    var mark = document.createElement('div');
-    mark.className = 'lvlpips';
-    mark.textContent = done ? '✔' : '';
-    card.appendChild(mark);
-
-    list.appendChild(card);
+    a = G.ACH[i];
+    done = G.save.ach.indexOf(a.id) >= 0;
+    html += '<div class="card' + (done ? ' done' : '') + '">' +
+            '<div class="ico">' + (done ? '🏆' : '🔒') + '</div>' +
+            '<div class="txt"><div class="nm">' + a.name + '</div>' +
+            '<div class="ds">' + a.desc + '</div></div>' +
+            '<div class="lvlpips">' + (done ? 'выполнено' : '🪙 ' + a.reward) + '</div></div>';
   }
-  money();
+  box.innerHTML = html;
 }
 
 /* ---------- настройки ---------- */
 function renderSettings() {
-  var pairs = [['swSound', 'sound'], ['swMusic', 'music'], ['swVibe', 'vibe']];
-  for (var i = 0; i < pairs.length; i++) {
-    var el = $(pairs[i][0]);
-    if (!el) continue;
-    if (G.save[pairs[i][1]]) el.classList.add('on');
-    else el.classList.remove('on');
+  setSw('swSound', G.save.sound);
+  setSw('swMusic', G.save.music);
+  setSw('swVibe', G.save.vibe);
+  var el = $('setInfo');
+  if (el) {
+    el.innerHTML = 'Angry Birds 1.1<br>Уровней пройдено: ' + G.levelsDone() +
+                   ' · Звёзд: ' + G.starsTotal() + '/150' +
+                   '<br>Монет: 🪙 ' + G.coins();
   }
-  var info = $('setInfo');
-  if (info) {
-    info.textContent = 'Монет: ' + (G.save.coins | 0) + ' · Звёзд: ' + G.starsTotal() +
-      '/' + (G.TOTAL_LEVELS * 3) + ' · Достижений: ' + G.achCount() + '/' + G.ACH.length +
-      ' · Запусков: ' + (G.save.runs | 0);
-  }
-  money();
 }
 
-/* ---------- страховка при старте ---------- */
-function hideAllAtStart() {
-  var i;
-  for (i = 0; i < SCREENS.length; i++) hide($(SCREENS[i]));
-  for (i = 0; i < OVERS.length; i++) hide($(OVERS[i]));
-  hide($('hud'));
+function setSw(id, on) {
+  var el = $(id);
+  if (!el) return;
+  if (on) el.classList.add('on');
+  else el.classList.remove('on');
 }
-hideAllAtStart();
+
+/* ---------- HUD ---------- */
+function resetCounters() {
+  var el = $('hudLevel');
+  if (el) el.textContent = 'Уровень ' + G.level;
+  var sc2 = $('hudScore');
+  if (sc2) sc2.textContent = '0';
+}
+
+function syncScore() {
+  var el = $('hudScore');
+  if (el) el.textContent = G.score;
+  var p = $('hudPigs');
+  if (p) p.textContent = '🐷 ' + G.alivePigs();
+}
+
+function syncHud() {
+  var box = $('hudBirds');
+  if (!box) return;
+  var html = '', i, b;
+  for (i = 0; i < G.birdsLeft.length; i++) {
+    b = G.birdsLeft[i];
+    html += '<div class="pip ' + (b.type === 'red' ? 'red' : b.type === 'yellow' ? 'yellow' : b.type === 'blue' ? 'blue' : 'black') + '"></div>';
+  }
+  box.innerHTML = html;
+  resetCounters();
+  syncScore();
+}
 
 return {
   show: show,
   hide: hide,
   reveal: reveal,
+  resetCounters: resetCounters,
   money: money,
   syncHud: syncHud,
   syncScore: syncScore,
-  resetCounters: resetCounters,
   renderLevels: renderLevels,
   renderShop: renderShop,
   renderAch: renderAch,
-  renderSettings: renderSettings,
-  hideAllAtStart: hideAllAtStart
+  renderSettings: renderSettings
 };
 })();
