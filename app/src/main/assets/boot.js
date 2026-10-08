@@ -1,6 +1,6 @@
 /* ============================================================
-   ANGRY BIRDS — запуск, игровой цикл, мост к Android
-   Требует: engine.js, engine2.js, render.js, ui.js, controls.js
+   ANGRY BIRDS — игровой цикл, запуск, мост к Android
+   Экспорт: ни одного. Работает как точка входа.
    ============================================================ */
 (function () {
 'use strict';
@@ -8,28 +8,28 @@
 var G = window.ABG, R = window.ABR, U = window.ABUI, C = window.ABC;
 
 function fatal(msg) {
-  var d = document.createElement('div');
-  d.style.cssText = 'position:fixed;inset:0;z-index:999;display:flex;align-items:center;' +
-    'justify-content:center;padding:24px;background:#0a0e1a;color:#fff;' +
-    'font:15px/1.6 sans-serif;text-align:center;white-space:pre-wrap';
-  d.textContent = msg;
-  document.body.appendChild(d);
+  document.body.innerHTML =
+    '<div style="position:fixed;inset:0;display:flex;align-items:center;' +
+    'justify-content:center;padding:24px;font:16px sans-serif;color:#fff;' +
+    'background:#0a0e1a;text-align:center;line-height:1.6;z-index:999">' + msg + '</div>';
 }
 
-if (!G || !R || !U || !C) {
-  fatal('Игра не запустилась.\n\n' +
-    'engine.js — ' + (G ? 'ок' : 'НЕ загружен') + '\n' +
-    'render.js — ' + (R ? 'ок' : 'НЕ загружен') + '\n' +
-    'ui.js — ' + (U ? 'ок' : 'НЕ загружен') + '\n' +
-    'controls.js — ' + (C ? 'ок' : 'НЕ загружен') + '\n\n' +
-    'Все файлы должны лежать в app/src/main/assets/');
+var problems = [];
+if (!G) problems.push('engine.js');
+if (!window.ABG || !window.ABG.physics) problems.push('engine2.js');
+if (!R) problems.push('render.js');
+if (!U) problems.push('ui.js');
+if (!C) problems.push('controls.js');
+
+if (problems.length) {
+  fatal('Не загрузились модули: <b>' + problems.join(', ') + '</b>.<br><br>' +
+        'Проверь, что эти файлы лежат в app/src/main/assets и подключены в index.html.');
   return;
 }
 
-var last = 0, hudT = 0, started = false;
+var last = 0, started = false;
 
-/* ---------- частицы и всплывающие очки ---------- */
-function effects(dt) {
+function stepParticles(dt) {
   var i, p;
   for (i = G.parts.length - 1; i >= 0; i--) {
     p = G.parts[i];
@@ -37,68 +37,60 @@ function effects(dt) {
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.life -= dt;
-    if (p.life <= 0 || p.y > G.GROUND_Y + 140) G.parts.splice(i, 1);
+    if (p.life <= 0 || p.y > G.GROUND_Y + 120) G.parts.splice(i, 1);
   }
   for (i = G.pops.length - 1; i >= 0; i--) {
-    G.pops[i].t -= dt;
+    G.pops[i].t -= dt * 0.85;
     if (G.pops[i].t <= 0) G.pops.splice(i, 1);
   }
 }
 
-/* ---------- полёт и камера ---------- */
-function flyers(dt) {
+function stepFlying(dt) {
   var f = G.flying;
-  if (f) {
-    var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
-    var onGround = f.y + f.r >= G.GROUND_Y - 2;
-    if (onGround && sp < 60) f.still = (f.still || 0) + dt;
-    else f.still = 0;
+  if (!f) return;
+  var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
+  var onGround = f.y + f.r >= G.GROUND_Y - 2;
+  if (sp < 50 && onGround) f.still = (f.still || 0) + dt;
+  else f.still = 0;
 
-    if (f.x < -140 || f.x > G.WORLD_W + 140 || f.y > G.GROUND_Y + 180 || f.still > 0.7) {
-      G.nextBird();
-      U.syncHud();
-      R.setCam(G.SLING_X - 80);
-    } else {
-      R.follow(f.x);
-    }
+  if (f.x < -100 || f.x > G.WORLD_W + 100 || f.y > G.GROUND_Y + 150 || f.still > 0.7) {
+    G.flying = null;
+    G.nextBird();
+    U.syncHud();
   } else {
-    R.setCam(G.SLING_X - 80);
+    R.follow(f.x);
   }
+}
 
-  var i, e, sp2;
+function stepExtra(dt) {
+  var i, e, sp;
   for (i = G.extraFlyers.length - 1; i >= 0; i--) {
     e = G.extraFlyers[i];
-    sp2 = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
-    if (e.x < -140 || e.x > G.WORLD_W + 140 || e.y > G.GROUND_Y + 180 ||
-        (e.y + e.r >= G.GROUND_Y - 2 && sp2 < 60)) {
+    sp = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+    if (e.x < -100 || e.x > G.WORLD_W + 100 || e.y > G.GROUND_Y + 150 ||
+        (sp < 50 && e.y + e.r >= G.GROUND_Y - 2)) {
       G.extraFlyers.splice(i, 1);
     }
   }
 }
 
-/* ---------- кадр ---------- */
 function frame(ts) {
   if (!last) last = ts;
-  var dt = (ts - last) / 1000;
+  var dt = Math.min(0.033, ((ts - last) / 1000) || 0.016);
   last = ts;
-  if (!(dt > 0)) dt = 0.016;
-  if (dt > 0.033) dt = 0.033;
 
   if (G.state === 'play') {
-    G.physics(dt);
-    effects(dt);
-    flyers(dt);
+    if (G.physics) G.physics(dt);
+    stepParticles(dt);
+    stepFlying(dt);
+    stepExtra(dt);
 
-    var res = G.checkEnd(dt);
+    var res = G.checkEnd ? G.checkEnd(dt) : null;
     if (res === 'win') C.onWin();
     else if (res === 'lose') C.onLose();
 
-    hudT += dt;
-    if (hudT > 0.2) {
-      hudT = 0;
-      U.syncScore();
-      U.syncHud();
-    }
+    U.syncHud();
+    U.syncScore();
   }
 
   R.tick(dt);
@@ -106,31 +98,30 @@ function frame(ts) {
   requestAnimationFrame(frame);
 }
 
-/* ---------- запуск ---------- */
 function start() {
   if (started) return;
   if (!C.init()) {
-    fatal('Не удалось запустить игру: canvas недоступен.');
+    fatal('Не удалось запустить игру: canvas #cv не найден.');
     return;
   }
   started = true;
-  if (G.save.music) G.musicStart();
+  C.goMenu();
   requestAnimationFrame(frame);
 }
 
-/* ---------- мост для MainActivity.java ---------- */
+/* ---------- вызовы из MainActivity.java ---------- */
 window.onAndroidBack = function () {
-  try { return C.onBack(); } catch (e) { return false; }
+  try { return !!C.onBack(); } catch (e) { return false; }
 };
-
 window.onAndroidPause = function () {
   try { C.pause(); } catch (e) { /* игнор */ }
-  G.musicStop();
+  try { G.musicStop(); } catch (e) { /* игнор */ }
   return true;
 };
-
 window.onAndroidResume = function () {
-  if (G.save.music) G.musicStart();
+  try {
+    if (G.save && G.save.music && G.state !== 'play') G.musicStart();
+  } catch (e) { /* игнор */ }
   return true;
 };
 
@@ -138,13 +129,14 @@ document.addEventListener('visibilitychange', function () {
   if (document.hidden) window.onAndroidPause();
   else window.onAndroidResume();
 });
-
 document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
 document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+document.addEventListener('dblclick', function (e) { e.preventDefault(); });
 
-if (document.readyState === 'loading') {
-  window.addEventListener('DOMContentLoaded', function () { setTimeout(start, 0); });
-} else {
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
   setTimeout(start, 0);
+} else {
+  window.addEventListener('load', start);
 }
+
 })();
