@@ -1,41 +1,73 @@
 /* ANGRY BIRDS — boot.js
-   Запуск, мост имён между модулями, ловля ошибок и диагностика на экране.
-   Версия: v9-diag */
+   Запуск, мост имён, страховка птицы на рогатке, диагностика на экране.
+   Версия: v10-diag  */
 (function () {
 'use strict';
 
-var BUILD = 'v9-diag';
+var BUILD = 'v10-diag';
 var G = window.ABG || (window.ABG = {});
 
 /* ---------- сбор ошибок ---------- */
 var errs = [];
 window.__abErrs = errs;
-function pushErr(t) { errs.push(String(t).slice(0, 200)); if (errs.length > 30) errs.shift(); }
+function pushErr(t) { errs.push(String(t).slice(0, 220)); if (errs.length > 30) errs.shift(); }
 
 window.addEventListener('error', function (e) {
-  if (e && e.message) pushErr((e.filename || '?') + ':' + (e.lineno || 0) + ' — ' + e.message);
-  else if (e && e.target && e.target.src) pushErr('не загрузился: ' + e.target.src.split('/').pop());
+  if (e && e.message) pushErr((e.filename || '?').split('/').pop() + ':' + (e.lineno || 0) + ' — ' + e.message);
+  else if (e && e.target && e.target.src) pushErr('не загрузился: ' + String(e.target.src).split('/').pop());
 }, true);
 window.addEventListener('unhandledrejection', function (e) {
   pushErr('Promise: ' + ((e.reason && e.reason.message) || e.reason));
 });
 
-/* ---------- мост имён ---------- */
+/* ---------- canvas: в index.html он называется cv ---------- */
+function canvas() {
+  return document.getElementById('game') || document.getElementById('cv') ||
+         document.querySelector('canvas');
+}
+
+/* ---------- мост имён между модулями ---------- */
 function bridge() {
-  var pairs = [
-    ['hasAch', 'achDone'], ['achDone', 'hasAch'],
-    ['saveAch', 'saveAchs'], ['loadAch', 'loadAchs'],
-    ['getSnd', 'sound'], ['playSnd', 'playSound']
-  ];
-  for (var i = 0; i < pairs.length; i++) {
-    var a = pairs[i][0], b = pairs[i][1];
-    if (typeof G[a] !== 'function' && typeof G[b] === 'function') G[a] = G[b];
-  }
-  // достижения: приводим любую из форм хранения к объекту
-  if (!G.achs || typeof G.achs !== 'object') G.achs = {};
+  // достижения: в engine.js метод называется achDone, а интерфейс звал hasAch
   if (typeof G.hasAch !== 'function') {
-    G.hasAch = function (id) { return !!G.achs[id]; };
+    if (typeof G.achDone === 'function') G.hasAch = function (id) { return G.achDone(id); };
+    else {
+      if (!G.save) G.save = {};
+      if (!G.save.ach) G.save.ach = [];
+      G.hasAch = function (id) { return G.save.ach.indexOf(id) >= 0; };
+    }
   }
+  if (typeof G.achDone !== 'function' && typeof G.hasAch === 'function') G.achDone = G.hasAch;
+  if (!G.save.achs && G.save) G.save.achs = (G.save.ach || []).reduce(function (o, k) { o[k] = 1; return o; }, {});
+  // звук
+  if (typeof G.playSound !== 'function' && G.SFX && typeof G.SFX.click === 'function') {
+    G.playSound = function () { };
+  }
+}
+
+/* ---------- страховка: птица на рогатке ---------- */
+function makeBird(type) {
+  var B = (G.BIRDS && G.BIRDS[type]) || { r: 22, mass: 1 };
+  return {
+    x: (typeof G.SLING_X === 'number' ? G.SLING_X : 200),
+    y: (typeof G.SLING_Y === 'number' ? G.SLING_Y : 452),
+    r: B.r || 22, type: type || 'red',
+    vx: 0, vy: 0, used: false, dx: 0, dy: 0, pulled: false
+  };
+}
+function ensureBird() {
+  try {
+    if (G.state !== 'play' || G.ended || G.paused) return;
+    if (G.active || G.flying) return;
+    if (!G.birdsLeft || !G.birdsLeft.length) return;
+    var t = G.birdsLeft.shift();
+    G.active = makeBird(t);
+    if (G.SFX && G.SFX.pull) { /* тихо, без звука при появлении */ }
+  } catch (e) { pushErr('ensureBird: ' + e.message); }
+}
+// ставимся на место, только если движок сам не определил nextBird
+if (typeof G.nextBird !== 'function') {
+  G.nextBird = function () { ensureBird(); };
 }
 
 /* ---------- панель диагностики ---------- */
@@ -46,80 +78,86 @@ function makePanel() {
   panel.id = 'abDiag';
   panel.style.cssText = [
     'position:fixed', 'left:6px', 'right:6px', 'bottom:6px', 'z-index:99999',
-    'background:rgba(0,0,0,0.75)', 'color:#8ef', 'font:11px/1.45 monospace',
+    'background:rgba(0,0,0,0.78)', 'color:#8ef', 'font:11px/1.45 monospace',
     'padding:6px 8px', 'border-radius:8px', 'white-space:pre-wrap',
-    'max-height:38%;', 'overflow:hidden', 'pointer-events:none'
+    'max-height:40%;', 'overflow:hidden'
   ].join(';');
+  panel.addEventListener('click', function () { hidden = true; panel.style.display = 'none'; });
   document.body.appendChild(panel);
   return panel;
 }
 function num(v) { return (typeof v === 'number' && isFinite(v)) ? (Math.round(v * 100) / 100) : '—'; }
 
 function diagText() {
-  var cv = document.getElementById('game') || document.querySelector('canvas');
-  var R = window.ABR, C = window.ABC, U = window.ABU;
+  var cv = canvas(), R = window.ABR;
   var L = [];
-  L.push('сборка ' + BUILD + '  ·  модули: ' + [G ? 'engine' : '-', window.ABG2 ? 'engine2' : '-',
-    R ? 'render' : '-', U ? 'ui' : '-', C ? 'controls' : '-'].join('/'));
-  L.push('canvas: ' + (cv ? (cv.width + 'x' + cv.height + ' css ' + Math.round(cv.clientWidth) + 'x' + Math.round(cv.clientHeight)) : 'НЕТ'));
-  L.push('рогатка R=' + num(G.SLING_X || (G.SLING && G.SLING.x)) + ' G=' + num(G.GROUND_Y || (G.GROUND && G.GROUND.y))
-    + '  ·  мир ' + num(G.WORLD_W) + 'x' + num(G.WORLD_H));
-  L.push('объекты: блоков ' + ((G.blocks || []).length) + ', свиней ' + ((G.pigs || []).length)
-    + ', активная птица ' + (G.active ? 'есть' : 'НЕТ') + ', в запасе ' + num(G.birdsLeft || (G.left && G.left.length) || 0));
-  if (R) {
-    L.push('камера: z' + num(R.scale ? R.scale() : G.scale) + ' x' + num(R.camX ? R.camX() : G.camX)
-      + ' y' + num(R.camY ? R.camY() : G.camY) + '  ·  уровень ' + num(G.level || 1));
-  }
-  L.push('состояние: ' + (G.state || G.mode || '—') + '  ·  пауза ' + (G.paused ? 'да' : 'нет'));
-  L.push('ошибок: ' + errs.length + (errs.length ? ' — ' + errs[errs.length - 1] : ''));
-  if (errs.length > 1) L.push('предыдущая: ' + errs[errs.length - 2]);
+  L.push('сборка ' + BUILD + '  ·  модули: engine' + (window.ABG ? '+' : '-')
+    + ' engine2' + (window.ABG2 ? '+' : '-') + ' render' + (window.ABR ? '+' : '-')
+    + ' ui' + (window.ABU ? '+' : '-') + ' controls' + (window.ABC ? '+' : '-'));
+  L.push('canvas: ' + (cv ? ('#' + cv.id + ' ' + cv.width + 'x' + cv.height + ' css ' +
+    Math.round(cv.clientWidth) + 'x' + Math.round(cv.clientHeight)) : 'НЕ НАЙДЕН'));
+  L.push('R=' + num(G.SLING_X) + ' G=' + num(G.GROUND_Y) + ' мир ' + num(G.WORLD_W) + 'x' + num(G.WORLD_H));
+  L.push('блоков ' + ((G.blocks || []).length) + ' · свиней ' + ((G.pigs || []).length)
+    + ' · активная ' + (G.active ? G.active.type : 'НЕТ')
+    + ' · запас ' + ((G.birdsLeft || []).length));
+  if (R) L.push('камера z' + num(R.getScale ? R.getScale() : G.scale)
+    + ' x' + num(R.getCamX ? R.getCamX() : G.camX)
+    + ' y' + num(R.getCamY ? R.getCamY() : G.camY));
+  L.push('состояние ' + (G.state || '—') + ' · пауза ' + (G.paused ? 'да' : 'нет')
+    + ' · уровень ' + num(G.level));
+  L.push('ошибок ' + errs.length + (errs.length ? ': ' + errs[errs.length - 1] : ''));
+  if (errs.length > 1) L.push('ранее: ' + errs[errs.length - 2]);
+  L.push('(тап по панели — скрыть)');
   return L.join('\n');
 }
 
 function drawPanel() {
-  if (hidden) { if (panel) panel.style.display = 'none'; return; }
+  if (hidden || (G.state !== 'play' && G.state !== 'level')) {
+    if (panel) panel.style.display = 'none';
+    return;
+  }
   var p = makePanel();
   p.style.display = 'block';
   p.textContent = diagText();
 }
 
-/* ---------- запуск ---------- */
-function startLevelSafe() {
-  try {
-    if (typeof G.startLevel === 'function' && !G.level) G.startLevel(1);
-  } catch (e) { pushErr('startLevel: ' + e.message); }
-}
-
+/* ---------- цикл ---------- */
 function loop() {
   try {
+    ensureBird();
     var dt = 1 / 60;
     if (window.ABG2 && typeof window.ABG2.update === 'function' && !G.paused) window.ABG2.update(dt);
+  } catch (e) { pushErr('физика: ' + e.message); }
+
+  try {
     if (window.ABR && typeof window.ABR.draw === 'function') window.ABR.draw();
-    if (window.ABU && typeof window.ABU.update === 'function') {
-      try { window.ABU.update(); } catch (e) { pushErr('ui.update: ' + e.message); }
-    }
-  } catch (e) {
-    pushErr('кадр: ' + e.message);
-  }
+  } catch (e) { pushErr('рендер: ' + e.message); }
+
+  try {
+    if (window.ABU && typeof window.ABU.update === 'function') window.ABU.update();
+  } catch (e) { pushErr('ui.update: ' + e.message); }
+
   drawPanel();
   window.requestAnimationFrame(loop);
 }
 
+/* ---------- запуск ---------- */
 function boot() {
   bridge();
   var tries = 0;
   (function wait() {
     tries++;
     bridge();
-    var ok = !!document.getElementById('game') && !!window.ABR;
-    if (ok || tries > 60) {
-      startLevelSafe();
-      makePanel();
+    if ((canvas() && window.ABR) || tries > 80) {
+      try { makePanel(); } catch (e) { }
       window.requestAnimationFrame(loop);
-      // повторная проверка: если мир пуст — пробуем построить уровень снова
       setTimeout(function () {
-        if (!(G.blocks || []).length) { try { G.startLevel && G.startLevel(1); } catch (e) { pushErr(e.message); } }
-      }, 800);
+        bridge();
+        if (!(G.blocks || []).length) {
+          try { if (G.startLevel) G.startLevel(1); } catch (e) { pushErr('startLevel: ' + e.message); }
+        }
+        ensureBird();
+      }, 700);
       return;
     }
     setTimeout(wait, 50);
@@ -129,6 +167,6 @@ function boot() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
 else boot();
 
-window.ABDiag = { show: function () { hidden = false; }, hide: function () { hidden = true; }, text: diagText };
-window.ABOOT = { build: BUILD, errs: errs };
+window.ABDiag = { show: function () { hidden = false; }, hide: function () { hidden = true; }, text: diagText, build: BUILD };
+window.ABOOT = { build: BUILD, errs: errs, canvas: canvas, bird: ensureBird };
 })();
