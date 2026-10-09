@@ -1,11 +1,18 @@
 /* ============================================================
    ANGRY BIRDS — управление, переходы, кнопки, запуск
    Экспорт: window.ABC
+
+   Правки:
+   • модуль теперь запускает себя сам (init) — раньше его никто не
+     вызывал, и НИ ОДНА кнопка не была привязана;
+   • захват рогатки принимает птицу и без поля state (страховка boot.js);
+   • R.init() вызывается безопасно, даже если вернёт не true.
    ============================================================ */
 window.ABC = (function () {
 'use strict';
 var G = window.ABG, R = window.ABR, U = window.ABUI;
 if (!G || !R) { console.error('ABG или ABR не загружены'); return null; }
+
 /* заглушка, если модуль интерфейса не поднялся */
 var UIO = U || {
   show: function () {}, hide: function () {}, reveal: function () {},
@@ -21,8 +28,8 @@ function setDrag(v) { dragging = v; G.dragging = v; }
 /* ---------- переходы ---------- */
 function beginLevel(n) {
   G.startLevel(n);
-  R.setCam(0);
-  R.snap();
+  if (R.setCam) R.setCam(0);
+  if (R.snap) R.snap();
   setDrag(false);
   UIO.resetCounters();
   UIO.show(null);
@@ -92,16 +99,18 @@ function pt(e) {
 }
 
 function onDown(e) {
-  if (G.state !== 'play') return;
+  if (G.state !== 'play') return;                 /* в меню касания не перехватываем */
   if (e.cancelable && e.type === 'touchstart') e.preventDefault();
   if (G.ac) G.ac();
   if (G.flying && !G.flying.used && G.useAbility) { if (G.useAbility()) return; }
   var p = pt(e);
+  if (!R.toWorld) return;
   var w = R.toWorld(p.clientX, p.clientY);
   var a = G.active;
-  if (a && a.state === 'ready') {
+  /* птица из engine2 имеет state:'ready', страховочная из boot.js — тоже */
+  if (a && (a.state === 'ready' || typeof a.state === 'undefined')) {
     var dx = w.x - a.x, dy = w.y - a.y;
-    if (Math.sqrt(dx * dx + dy * dy) < 200) {
+    if (Math.sqrt(dx * dx + dy * dy) < 220) {
       setDrag(true);
       if (G.SFX && G.SFX.pull) G.SFX.pull();
       move(p);
@@ -111,7 +120,7 @@ function onDown(e) {
 
 function move(p) {
   var a = G.active;
-  if (!a) return;
+  if (!a || !R.toWorld) return;
   var w = R.toWorld(p.clientX, p.clientY);
   var dx = w.x - G.SLING_X, dy = w.y - G.SLING_Y;
   var d = Math.sqrt(dx * dx + dy * dy);
@@ -130,12 +139,25 @@ function onMove(e) {
 function onUp() {
   if (!dragging) return;
   setDrag(false);
-  if (G.shoot && G.shoot() && G.flying) R.follow(G.flying.x);
+  if (G.shoot && G.shoot() && G.flying && R.follow) R.follow(G.flying.x);
 }
 
 /* ---------- кнопки ---------- */
 function bind() {
-  function on(id, fn) { var el = $(id); if (el) el.addEventListener('click', fn); }
+  function on(id, fn) {
+    var el = $(id);
+    if (!el) return;
+    /* click + touchend с защитой от двойного срабатывания */
+    var last = 0;
+    function once(e) {
+      var t = Date.now();
+      if (t - last < 350) return;
+      last = t;
+      if (fn) fn(e);
+    }
+    el.addEventListener('click', once);
+    el.addEventListener('touchend', function (e) { e.preventDefault(); once(e); }, false);
+  }
   function tick() { if (G.SFX && G.SFX.click) G.SFX.click(); }
 
   on('btnPlay', function () { tick(); UIO.show('levels'); });
@@ -177,25 +199,36 @@ function bind() {
 var started = false;
 function init() {
   if (started) return true;
-  if (!R.init()) return false;
-  bind();
-  var cv = $('cv');
-  if (cv) {
-    cv.addEventListener('touchstart', onDown, { passive: false });
-    cv.addEventListener('touchmove', onMove, { passive: false });
-    cv.addEventListener('touchend', onUp, { passive: true });
-    cv.addEventListener('touchcancel', onUp, { passive: true });
-    cv.addEventListener('mousedown', onDown);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+  try {
+    if (R.init) { var r = R.init(); if (r === false) return false; }
+    bind();
+    var cv = $('cv');
+    if (cv) {
+      cv.addEventListener('touchstart', onDown, { passive: false });
+      cv.addEventListener('touchmove', onMove, { passive: false });
+      cv.addEventListener('touchend', onUp, { passive: true });
+      cv.addEventListener('touchcancel', onUp, { passive: true });
+      cv.addEventListener('mousedown', onDown);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+    document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    UIO.show('menu');
+    UIO.money();
+    started = true;
+    return true;
+  } catch (e) {
+    console.error('controls.init: ' + e.message);
+    return false;
   }
-  document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
-  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-  UIO.show('menu');
-  UIO.money();
-  started = true;
-  return true;
 }
+
+/* самозапуск: модуль больше не ждёт, пока его кто-нибудь позовёт */
+(function auto() {
+  if (started) return;
+  if (!init()) setTimeout(auto, 250);
+})();
 
 return {
   init: init, beginLevel: beginLevel, goMenu: goMenu,
