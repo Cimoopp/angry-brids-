@@ -1,134 +1,134 @@
-/* ============================================================
-   ANGRY BIRDS — игровой цикл, запуск, мост к Android
-   ============================================================ */
+/* ANGRY BIRDS — boot.js
+   Запуск, мост имён между модулями, ловля ошибок и диагностика на экране.
+   Версия: v9-diag */
 (function () {
 'use strict';
 
-/* Показываем ошибку прямо на экране — иначе на телефоне не видно, что упало */
-window.onerror = function (msg, src, line) {
-  try {
-    var d = document.createElement('div');
-    d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#7a1414;' +
-      'color:#fff;font:12px/1.45 monospace;padding:8px 10px;max-height:42%;overflow:auto';
-    d.textContent = 'Ошибка: ' + msg + ' — ' + String(src || '').split('/').pop() + ':' + line;
-    document.body.appendChild(d);
-  } catch (e) { /* игнор */ }
-  return false;
-};
+var BUILD = 'v9-diag';
+var G = window.ABG || (window.ABG = {});
 
-var G = window.ABG, R = window.ABR, U = window.ABUI, C = window.ABC;
+/* ---------- сбор ошибок ---------- */
+var errs = [];
+window.__abErrs = errs;
+function pushErr(t) { errs.push(String(t).slice(0, 200)); if (errs.length > 30) errs.shift(); }
 
-function fatal(msg) {
-  document.body.innerHTML =
-    '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
-    'padding:24px;font:16px/1.5 sans-serif;color:#fff;background:#0a0e1a;text-align:center">' +
-    msg + '</div>';
-}
-
-var miss = [];
-if (!G) miss.push('engine.js');
-if (!R) miss.push('render.js');
-if (!U) miss.push('ui.js');
-if (!C) miss.push('controls.js');
-if (miss.length) {
-  fatal('Не загрузились модули: ' + miss.join(', ') + '. Проверь папку assets внутри APK.');
-  return;
-}
-
-var last = 0, started = false;
-
-function loop(ts) {
-  if (!last) last = ts;
-  var dt = Math.min(0.034, ((ts - last) / 1000) || 0.016);
-  last = ts;
-  var i, p;
-
-  if (G.state === 'play') {
-    G.physics(dt);
-
-    for (i = G.parts.length - 1; i >= 0; i--) {
-      p = G.parts[i];
-      p.vy += 900 * dt;
-      p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
-      if (p.life <= 0 || p.y > G.GROUND_Y + 140) G.parts.splice(i, 1);
-    }
-    for (i = G.pops.length - 1; i >= 0; i--) {
-      p = G.pops[i];
-      p.t -= dt * 0.9; p.y -= 28 * dt;
-      if (p.t <= 0) G.pops.splice(i, 1);
-    }
-
-    if (G.flying) {
-      var f = G.flying;
-      if (!f.trace) f.trace = [];
-      f.trace.push({ x: f.x, y: f.y });
-      if (f.trace.length > 26) f.trace.shift();
-      var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
-      var gnd = f.y + f.r >= G.GROUND_Y - 2;
-      if (sp < 45 && gnd) f.still = (f.still || 0) + dt; else f.still = 0;
-      if (f.x < -120 || f.x > G.WORLD_W + 120 || f.y > G.GROUND_Y + 160 || f.still > 0.8) {
-        G.flying = null;
-        G.nextBird();
-        U.syncHud();
-      } else {
-        R.follow(f.x);
-      }
-    }
-
-    for (i = G.extraFlyers.length - 1; i >= 0; i--) {
-      var e = G.extraFlyers[i];
-      var s2 = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
-      if (e.x < -120 || e.x > G.WORLD_W + 120 || e.y > G.GROUND_Y + 160 ||
-          (s2 < 45 && e.y + e.r >= G.GROUND_Y - 2)) {
-        G.extraFlyers.splice(i, 1);
-      }
-    }
-
-    var res = G.checkEnd(dt);
-    if (res === 'win') C.onWin();
-    else if (res === 'lose') C.onLose();
-    U.syncScore();
-  }
-
-  R.tick(dt);
-  R.draw();
-  requestAnimationFrame(loop);
-}
-
-function start() {
-  if (started) return;
-  if (!C.init()) return;
-  started = true;
-  if (G.save && G.save.music) G.musicStart();
-  requestAnimationFrame(loop);
-}
-
-/* ---------- мост для MainActivity.java ---------- */
-window.onAndroidBack = function () {
-  try { return C.onBack(); } catch (e) { return false; }
-};
-window.onAndroidPause = function () {
-  try { C.pause(); } catch (e) { /* игнор */ }
-  G.musicStop();
-  return true;
-};
-window.onAndroidResume = function () {
-  if (G.save && G.save.music && G.state !== 'play') G.musicStart();
-  return true;
-};
-
-document.addEventListener('visibilitychange', function () {
-  if (document.hidden) window.onAndroidPause();
-  else window.onAndroidResume();
+window.addEventListener('error', function (e) {
+  if (e && e.message) pushErr((e.filename || '?') + ':' + (e.lineno || 0) + ' — ' + e.message);
+  else if (e && e.target && e.target.src) pushErr('не загрузился: ' + e.target.src.split('/').pop());
+}, true);
+window.addEventListener('unhandledrejection', function (e) {
+  pushErr('Promise: ' + ((e.reason && e.reason.message) || e.reason));
 });
 
-document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
-document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', function () { setTimeout(start, 0); });
-} else {
-  setTimeout(start, 0);
+/* ---------- мост имён ---------- */
+function bridge() {
+  var pairs = [
+    ['hasAch', 'achDone'], ['achDone', 'hasAch'],
+    ['saveAch', 'saveAchs'], ['loadAch', 'loadAchs'],
+    ['getSnd', 'sound'], ['playSnd', 'playSound']
+  ];
+  for (var i = 0; i < pairs.length; i++) {
+    var a = pairs[i][0], b = pairs[i][1];
+    if (typeof G[a] !== 'function' && typeof G[b] === 'function') G[a] = G[b];
+  }
+  // достижения: приводим любую из форм хранения к объекту
+  if (!G.achs || typeof G.achs !== 'object') G.achs = {};
+  if (typeof G.hasAch !== 'function') {
+    G.hasAch = function (id) { return !!G.achs[id]; };
+  }
 }
 
+/* ---------- панель диагностики ---------- */
+var panel = null, hidden = false;
+function makePanel() {
+  if (panel) return panel;
+  panel = document.createElement('div');
+  panel.id = 'abDiag';
+  panel.style.cssText = [
+    'position:fixed', 'left:6px', 'right:6px', 'bottom:6px', 'z-index:99999',
+    'background:rgba(0,0,0,0.75)', 'color:#8ef', 'font:11px/1.45 monospace',
+    'padding:6px 8px', 'border-radius:8px', 'white-space:pre-wrap',
+    'max-height:38%;', 'overflow:hidden', 'pointer-events:none'
+  ].join(';');
+  document.body.appendChild(panel);
+  return panel;
+}
+function num(v) { return (typeof v === 'number' && isFinite(v)) ? (Math.round(v * 100) / 100) : '—'; }
+
+function diagText() {
+  var cv = document.getElementById('game') || document.querySelector('canvas');
+  var R = window.ABR, C = window.ABC, U = window.ABU;
+  var L = [];
+  L.push('сборка ' + BUILD + '  ·  модули: ' + [G ? 'engine' : '-', window.ABG2 ? 'engine2' : '-',
+    R ? 'render' : '-', U ? 'ui' : '-', C ? 'controls' : '-'].join('/'));
+  L.push('canvas: ' + (cv ? (cv.width + 'x' + cv.height + ' css ' + Math.round(cv.clientWidth) + 'x' + Math.round(cv.clientHeight)) : 'НЕТ'));
+  L.push('рогатка R=' + num(G.SLING_X || (G.SLING && G.SLING.x)) + ' G=' + num(G.GROUND_Y || (G.GROUND && G.GROUND.y))
+    + '  ·  мир ' + num(G.WORLD_W) + 'x' + num(G.WORLD_H));
+  L.push('объекты: блоков ' + ((G.blocks || []).length) + ', свиней ' + ((G.pigs || []).length)
+    + ', активная птица ' + (G.active ? 'есть' : 'НЕТ') + ', в запасе ' + num(G.birdsLeft || (G.left && G.left.length) || 0));
+  if (R) {
+    L.push('камера: z' + num(R.scale ? R.scale() : G.scale) + ' x' + num(R.camX ? R.camX() : G.camX)
+      + ' y' + num(R.camY ? R.camY() : G.camY) + '  ·  уровень ' + num(G.level || 1));
+  }
+  L.push('состояние: ' + (G.state || G.mode || '—') + '  ·  пауза ' + (G.paused ? 'да' : 'нет'));
+  L.push('ошибок: ' + errs.length + (errs.length ? ' — ' + errs[errs.length - 1] : ''));
+  if (errs.length > 1) L.push('предыдущая: ' + errs[errs.length - 2]);
+  return L.join('\n');
+}
+
+function drawPanel() {
+  if (hidden) { if (panel) panel.style.display = 'none'; return; }
+  var p = makePanel();
+  p.style.display = 'block';
+  p.textContent = diagText();
+}
+
+/* ---------- запуск ---------- */
+function startLevelSafe() {
+  try {
+    if (typeof G.startLevel === 'function' && !G.level) G.startLevel(1);
+  } catch (e) { pushErr('startLevel: ' + e.message); }
+}
+
+function loop() {
+  try {
+    var dt = 1 / 60;
+    if (window.ABG2 && typeof window.ABG2.update === 'function' && !G.paused) window.ABG2.update(dt);
+    if (window.ABR && typeof window.ABR.draw === 'function') window.ABR.draw();
+    if (window.ABU && typeof window.ABU.update === 'function') {
+      try { window.ABU.update(); } catch (e) { pushErr('ui.update: ' + e.message); }
+    }
+  } catch (e) {
+    pushErr('кадр: ' + e.message);
+  }
+  drawPanel();
+  window.requestAnimationFrame(loop);
+}
+
+function boot() {
+  bridge();
+  var tries = 0;
+  (function wait() {
+    tries++;
+    bridge();
+    var ok = !!document.getElementById('game') && !!window.ABR;
+    if (ok || tries > 60) {
+      startLevelSafe();
+      makePanel();
+      window.requestAnimationFrame(loop);
+      // повторная проверка: если мир пуст — пробуем построить уровень снова
+      setTimeout(function () {
+        if (!(G.blocks || []).length) { try { G.startLevel && G.startLevel(1); } catch (e) { pushErr(e.message); } }
+      }, 800);
+      return;
+    }
+    setTimeout(wait, 50);
+  })();
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+window.ABDiag = { show: function () { hidden = false; }, hide: function () { hidden = true; }, text: diagText };
+window.ABOOT = { build: BUILD, errs: errs };
 })();
